@@ -130,13 +130,13 @@ def main(path, output_path):
     out[:,2:] = np.around(out[:,2:], decimals=4)
 
 
-    with open(output_path+"out_20210309.csv", "w", newline="") as f:
+    with open(output_path+"20210309.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerows(out)
 
 
 if __name__ == "__main__":
     input_path = 'data/annotations/start_end/'
-    output_path = 'data/annotations/out_generate_label/'
+    output_path = 'data/annotations/processed/'
 
     main(input_path, output_path)

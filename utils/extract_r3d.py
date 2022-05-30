@@ -157,8 +157,8 @@ if __name__ == "__main__":
 
     pretrained_path = 'pretrained/i3d_r50_kinetics.pth'
     image_folder_path = 'data/images/'
-    r3d_feature_path = 'data/r3d_features/'
-    r3d_feature_path_pt = 'data/r3d_features.pt'
+    r3d_feature_path = 'features/r3d_features/'
+    r3d_feature_path_pt = 'features/r3d_features.pt'
     Path(r3d_feature_path).mkdir(parents=True, exist_ok=True)
 
     frequency = 32

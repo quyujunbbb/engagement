@@ -118,12 +118,10 @@ def save_to_pt(roi_feature_path):
     """
     feature_files = natsorted(
         [str(f) for f in Path(roi_feature_path).glob('**/*.npy')])
-    session_info = np.zeros((len(feature_files), 2)).astype(int)  # clip_num, p_num
 
     startime = time.time()
     for i, file in enumerate(feature_files):
         features = torch.tensor(np.load(file))  # (clip_num, p_num, T, C, W, H)
-        session_info[i] = [features.size()[0], features.size()[1]]
 
         features = features.view((-1, 4, 1024, 7, 7))
         if i == 0:
@@ -131,8 +129,7 @@ def save_to_pt(roi_feature_path):
         else:
             data = torch.cat((data, features), 0)
 
-    torch.save(session_info, "data/data_info.pt")
-    torch.save(data, "data/roi_features.pt")
+    torch.save(data, "features/roi_features.pt")
 
     print(f'output data size {data.size()}')
     # c, 12474 = (clip_num x p_num) for every session
@@ -153,9 +150,9 @@ if __name__ == "__main__":
     print("Extract RoI Align features")
     print("--------------------------")
 
-    r3d_feature_path = 'data/r3d_features/'
-    bounding_box_path = 'data/bytetrack_roi/boxes/'
-    roi_feature_path = 'data/roi_features/'
+    r3d_feature_path = 'features/r3d_features/'
+    bounding_box_path = 'features/bytetrack_roi/boxes/'
+    roi_feature_path = 'features/roi_features/'
     Path(roi_feature_path).mkdir(parents=True, exist_ok=True)
 
     r3d_files = natsorted(

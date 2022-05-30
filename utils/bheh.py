@@ -1,32 +1,22 @@
 import os
-import time
-from pathlib import Path
-
-from natsort import natsorted
 import random
+
 import numpy as np
 import pandas as pd
-from pyparsing import col
 import torch
+from natsort import natsorted
 from torch.utils.data import Dataset
 
 
-def print_session_info():
-    session_info = pd.read_csv('data/session_info.csv',
-                               usecols=['clip_num', 'p_num'],
-                               dtype=int,
-                               comment='#')
-    count = session_info['clip_num'].sum()
-    print(f'{len(session_info)} sessions, {count} clips')
-
-
-class IMIBHEH(Dataset):
+class BHEH(Dataset):
 
     def __init__(self, features, labels, transform=None):
         self.features = features
         self.labels = labels
         self.transform = transform
-        print(f'initialize features {self.features.size()}, labels {self.labels.size()}')
+        print(
+            f'initialize features {self.features.size()}, labels {self.labels.size()}'
+        )
 
     def __getitem__(self, index):
         feature = self.features[index, :, :, :, :]
@@ -35,30 +25,6 @@ class IMIBHEH(Dataset):
 
     def __len__(self):
         return len(self.labels)
-
-
-def random_split(roi_path):
-    """random roi_features based on the sessions. 9+9+9+8+8=43 sessions.
-    Args:
-        roi_path (string): the folder path that stores roi_features
-    Returns:
-        train_files (IMIBHEH) : training data
-        test_files  (IMIBHEH) : test data
-    """
-    roi_files = natsorted(os.listdir(roi_path))
-    random.shuffle(roi_files)
-    print(roi_files)
-
-    split_1 = roi_files[:9]
-    split_2 = roi_files[9:18]
-    split_3 = roi_files[18:27]
-    split_4 = roi_files[27:35]
-    split_5 = roi_files[35:]
-
-    train_files = split_1 + split_2 + split_3 + split_4
-    test_files = split_5
-
-    return train_files, test_files
 
 
 def preprocess(files, labels):
@@ -96,30 +62,57 @@ def preprocess(files, labels):
     # print(f'train set feature size {features_out.size()}')  # [clip_num x p_num, C, T, W, H]
     # print(f'train set label size {label_out.size()}')
     # print(session_info)
-    data = IMIBHEH(features_out, label_out)
+    data = BHEH(features_out, label_out)
 
     return data
+
+
+def roi_s(mode):
+    """Generate small-size dataset using RoI features based on sessions.
+    """
+    train_files = [
+        '20210105_14.npy', '20210309_01.npy', '20210105_12.npy',
+        '20210309_05.npy', '20201222_10.npy', '20210105_05.npy',
+        '20201222_11.npy', '20210309_09.npy'
+    ]
+    test_files = ['20201229_05.npy', '20210105_06.npy']
+
+    label_path = 'data/annotations/labels.csv'
+    labels = pd.read_csv(label_path)
+    if mode == 'Reg':
+        labels = labels[['session', 'overall']]
+    elif mode == 'Class':
+        labels = labels[['session', 'class']]
+
+    train_data = preprocess(train_files, labels)
+    test_data = preprocess(test_files, labels)
+
+    return train_data, test_data
 
 
 def roi_ls(mode):
     """Generate full-size dataset using RoI features based on sessions.
     """
     # train_files, test_files = random_split(roi_path)
-    train_files = ['20210105_14.npy', '20210309_01.npy', '20210105_12.npy',
-                   '20210309_05.npy', '20201222_10.npy', '20210105_05.npy',
-                   '20201222_11.npy', '20210309_09.npy', '20201222_12.npy',
-                   '20210105_13.npy', '20201222_03.npy', '20210105_11.npy',
-                   '20201222_08.npy', '20201222_06.npy', '20210309_06.npy',
-                   '20201229_03.npy', '20210105_09.npy', '20201229_02.npy',
-                   '20201222_04.npy', '20201222_09.npy', '20210105_04.npy',
-                   '20210105_02.npy', '20201222_13.npy', '20201229_04.npy',
-                   '20210309_07.npy', '20201222_07.npy', '20210309_04.npy',
-                   '20210105_10.npy', '20201222_14.npy', '20201222_02.npy',
-                   '20210105_07.npy', '20201229_01.npy', '20210309_02.npy',
-                   '20210105_08.npy', '20210105_01.npy']
-    test_files = ['20201229_05.npy', '20210105_06.npy', '20201222_05.npy',
-                  '20210309_08.npy', '20210309_03.npy', '20201222_01.npy',
-                  '20201229_06.npy', '20210105_03.npy']
+    train_files = [
+        '20210105_14.npy', '20210309_01.npy', '20210105_12.npy',
+        '20210309_05.npy', '20201222_10.npy', '20210105_05.npy',
+        '20201222_11.npy', '20210309_09.npy', '20201222_12.npy',
+        '20210105_13.npy', '20201222_03.npy', '20210105_11.npy',
+        '20201222_08.npy', '20201222_06.npy', '20210309_06.npy',
+        '20201229_03.npy', '20210105_09.npy', '20201229_02.npy',
+        '20201222_04.npy', '20201222_09.npy', '20210105_04.npy',
+        '20210105_02.npy', '20201222_13.npy', '20201229_04.npy',
+        '20210309_07.npy', '20201222_07.npy', '20210309_04.npy',
+        '20210105_10.npy', '20201222_14.npy', '20201222_02.npy',
+        '20210105_07.npy', '20201229_01.npy', '20210309_02.npy',
+        '20210105_08.npy', '20210105_01.npy'
+    ]
+    test_files = [
+        '20201229_05.npy', '20210105_06.npy', '20201222_05.npy',
+        '20210309_08.npy', '20210309_03.npy', '20201222_01.npy',
+        '20201229_06.npy', '20210105_03.npy'
+    ]
 
     label_path = 'data/annotations/labels.csv'
     labels = pd.read_csv(label_path)
@@ -144,7 +137,8 @@ def roi_l(mode):
     # std = data.std()
     # data = (data - mean) / std
 
-    session_info = pd.read_csv('data/session_info.csv', usecols=['clip_num', 'p_num'])
+    session_info = pd.read_csv('data/session_info.csv',
+                               usecols=['clip_num', 'p_num'])
     # print(session_info)
     session_info_new = session_info.loc[session_info.index.repeat(
         session_info.c_num)]
@@ -163,7 +157,7 @@ def roi_l(mode):
     # print(labels_new)
     # print(f'label size {labels_new.size()}')
 
-    data = IMIBHEH(data, labels_new)
+    data = BHEH(data, labels_new)
 
     return data
 
@@ -184,11 +178,11 @@ def r3d_l(mode):
     # print(labels)
     # print(f'label size {labels.size()}')
 
-    data = IMIBHEH(data, labels)
+    data = BHEH(data, labels)
 
     return data
 
 
 if __name__ == '__main__':
-    print_session_info()
     # train_data, test_data = roi_l_session(mode='Reg')
+    pass
