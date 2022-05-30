@@ -1,0 +1,14 @@
+# data
+data/
+
+# features
+features/
+
+# results
+results/
+
+# others
+.vscode/
+__pycache__/
+pretrained/
+run.sh
