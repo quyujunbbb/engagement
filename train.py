@@ -188,12 +188,12 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = True
 
     args = make_parser().parse_args()
+    cfg = Config()
     timestamp = time.strftime('%y%m%d-%H%M%S', time.localtime())
     output_path = f'results/{timestamp}/'
     os.makedirs(output_path, exist_ok=True)
     logger.add(f'{output_path}/log.txt', format='{message}', level='INFO')
 
-    # configure training
     models = {
         'Nonlocal_FC3_Reg'   : nets.Nonlocal_FC3_Reg,
         'Nonlocal_FC1_Reg'   : nets.Nonlocal_FC1_Reg,
@@ -212,9 +212,9 @@ if __name__ == '__main__':
 
     logger.info(
         f'{"=========="*8}\n'
-        f'Configuration: -m {args.model} -d {args.data}\n'
+        f'Configuration: -m {args.model} -d {args.dataset} '
         f'bs={cfg.batch_size} ep={cfg.epoch} '
         f'lr={cfg.learning_rate:.0e} step={cfg.gamma}/{cfg.step_size}'
     )
 
-    train(model, timestamp, output_path)
+    # train(model, timestamp, output_path)

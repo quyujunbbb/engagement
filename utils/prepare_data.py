@@ -1,13 +1,12 @@
 import os
+import random
 import time
 from pathlib import Path
 
-from natsort import natsorted
-import random
 import numpy as np
 import pandas as pd
-from pyparsing import col
 import torch
+from natsort import natsorted
 from torch.utils.data import Dataset
 
 
