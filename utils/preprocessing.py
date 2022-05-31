@@ -3,7 +3,9 @@ import subprocess
 
 import cv2
 import numpy as np
+import pandas as pd
 from natsort import natsorted
+from requests import session
 
 class process_videos():
 
@@ -75,6 +77,7 @@ class process_videos():
 class process_images():
 
     def image2np(input_path, output_path):
+        print('image2np')
         images_out = []
         images = natsorted(os.listdir(input_path))
         totle_image_number = len(images)
@@ -87,18 +90,70 @@ class process_images():
             images_out.append(temp)
         images_out = np.array(images_out)
         print(images_out.shape)
-
         np.save(output_path, images_out)
+    
+    def crop_images(input_path, output_path, box_path):
+        print('crop_images')
+        boxes = pd.read_csv(box_path)
+        sessions = natsorted(os.listdir(input_path))
+        for i, session in enumerate(sessions):
+            session_path = input_path + session + '/'
+            # print(session_path)
+            images = natsorted(os.listdir(session_path))
+            img_1 = cv2.imread(session_path + images[200])
+            img_2 = cv2.imread(session_path + images[500])
+            img_3 = cv2.imread(session_path + images[800])
+
+            box = boxes.iloc[i,:]
+            center = box['x1'] + (box['x2'] - box['x1']) / 2
+            x_left = int(center - 540)
+            x_right = int(center + 540)
+            if x_left < 0:
+                x_left = 0
+                x_right = 1080
+            if x_right > 1920:
+                x_left = 1920 - 1080
+                x_right = 1920
+            print(x_left, x_right)
+            img_1 = img_1[:, x_left:x_right, :]
+            img_2= img_2[:, x_left:x_right, :]
+            img_3 = img_3[:, x_left:x_right, :]
+            # cv2.imwrite(output_path + session + '_' + images[200], img_1)
+            # cv2.imwrite(output_path + session + '_' + images[500], img_2)
+            # cv2.imwrite(output_path + session + '_' + images[800], img_3)
+    
+    def session_info(input_path):
+        print('session_info')
+        cols=['session', 'total_frame', 'clip_num']
+        info = []
+        sessions = natsorted(os.listdir(input_path))
+        for session in sessions:
+            session_path = input_path + session + '/'
+            images = natsorted(os.listdir(session_path))
+            total_frame = len(images)
+            clip_num = int(len(images)/32)
+            info.append([session, total_frame, clip_num])
+        info = pd.DataFrame(info, columns=cols)
+        print(info)
+        info.to_csv('data/session_info_new.csv', index=False)
 
 
 if __name__ == '__main__':
     video_path = 'data/videos/'
-    image_path = 'data/images_new/'
-    process_videos.video_info(video_path)
-    process_videos.video2images(video_path, image_path)
+    image_path = 'data/images/'
+    box_path = 'data/crop_boxes.csv'
+    # process_videos.video_info(video_path)
+    # process_videos.video2images(video_path, image_path)
 
-    image_folders = ['20201222_01', '20201222_02']
-    for image_folder in image_folders:
-        image_path = "data/images/" + image_folder + '/'
-        numpy_path = "data/images/" + image_folder + '/'
-        process_images.image2np(image_path, numpy_path)
+    # image2np
+    # image_folders = ['20201222_01', '20201222_02']
+    # for image_folder in image_folders:
+    #     image_path = "data/images/" + image_folder + '/'
+    #     numpy_path = "data/images/" + image_folder + '/'
+    #     process_images.image2np(image_path, numpy_path)
+
+    # crop_images
+    # process_images.crop_images(image_path, 'data/cropped/', box_path)
+
+    # session_info
+    process_images.session_info(image_path)

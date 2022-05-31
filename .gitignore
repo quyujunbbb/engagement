@@ -1,11 +1,15 @@
 # data
-data/
+data/images/
+data/profiles/
 
 # features
 features/
 
 # results
 results/
+
+# visualize
+visualize/data/
 
 # others
 .vscode/

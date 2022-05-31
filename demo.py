@@ -9,7 +9,7 @@ from PIL import Image
 from torch.autograd import Variable
 
 from models.resnet import i3_res50
-from utils.extract_r3d import extract_r3d_features, save_to_pt
+from extract_r3d import extract_r3d_features, save_to_pt
 
 
 if __name__ == "__main__":

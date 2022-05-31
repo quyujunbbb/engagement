@@ -4,13 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-def main(path, output_path):
-    """Generate clip-level labels.
-
-    Args:
-        path        : input_path
-        output_path : output_path
-    """
+def generate_clip_label(path, output_path):
     print("Generate clip-level labels")
 
     df = pd.read_csv(path + "20210309.csv")
@@ -20,8 +14,8 @@ def main(path, output_path):
     df.begin = (df.begin.dt.hour+df.begin.dt.minute)*60 + df.begin.dt.second
     df.end = (df.end.dt.hour+df.end.dt.minute)*60 + df.end.dt.second
     df = df.to_numpy()
-    # print(df)
-    # print(df.shape)
+    print(df)
+    print(df.shape)
 
     for i in range(len(df)-1):
         try:
@@ -46,7 +40,7 @@ def main(path, output_path):
     # clp_num = [60, 81, 62, 92, 93, 52, 47, 65, 34, 123, 53, 32, 21, 24]
 
     sessions = ["20210309_01", "20210309_02", "20210309_03", "20210309_04", "20210309_05", "20210309_06", "20210309_07", "20210309_08", "20210309_09"]
-    clp_num = [117, 66, 69, 216, 41, 110, 125, 39, 121]
+    clp_num = [579, 332, 347, 1076, 207, 551, 625, 197, 608]
 
     out = np.zeros([np.sum(clp_num), 6])
     print(out.shape)
@@ -137,6 +131,5 @@ def main(path, output_path):
 
 if __name__ == "__main__":
     input_path = 'data/annotations/start_end/'
-    output_path = 'data/annotations/processed/'
-
-    main(input_path, output_path)
+    output_path = 'data/annotations/processed_new/'
+    generate_clip_label(input_path, output_path)
