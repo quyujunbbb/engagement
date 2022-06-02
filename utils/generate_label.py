@@ -1,135 +1,166 @@
-import csv
+import os
 
 import numpy as np
 import pandas as pd
+from natsort import natsorted
 
 
-def generate_clip_label(path, output_path):
-    print("Generate clip-level labels")
+def generate_clip_label_new(input_path, output_path):
+    print('generate_clip_label_new:')
 
-    df = pd.read_csv(path + "20210309.csv")
+    session_info = pd.read_csv('data/session_info_new.csv')
 
-    df.begin = pd.to_datetime(df.begin, format='%H:%M:%S')
-    df.end = pd.to_datetime(df.end, format='%H:%M:%S')
-    df.begin = (df.begin.dt.hour+df.begin.dt.minute)*60 + df.begin.dt.second
-    df.end = (df.end.dt.hour+df.end.dt.minute)*60 + df.end.dt.second
-    df = df.to_numpy()
-    print(df)
-    print(df.shape)
+    dates = ['20201222', '20201229', '20210105', '20210309']
+    session_num = [14, 6, 14, 9]
+    for date_idx, date in enumerate(dates):
+        input_label_path = input_path + date + '.csv'
+        output_label_path = output_path + date + '.csv'
 
-    for i in range(len(df)-1):
-        try:
-            assert df[i,4] == df[i+1,3]
-        except:
-            if df[i+1,3] == 0:
-                pass
-            else:
-                print(f'line {i} has problem: {df[i,4]}, {df[i+1,3]}')
+        # ----------------------------------------------------------------------
+        # process begin and end in input_label (convert to second)
+        input_label = pd.read_csv(input_label_path)
+        input_label['begin'] = pd.to_datetime(input_label['begin'], format='%H:%M:%S')
+        input_label['end'] = pd.to_datetime(input_label['end'], format='%H:%M:%S')
+        input_label['begin'] = (input_label['begin'].dt.hour+input_label['begin'].dt.minute)*60 + input_label['begin'].dt.second
+        input_label['end'] = (input_label['end'].dt.hour+input_label['end'].dt.minute)*60 + input_label['end'].dt.second
+        print(input_label[:14])
+        print(f'input label shape {input_label.shape}')
+        print()
 
-    affective = df[df[:,2]==1]
-    visual = df[df[:,2]==2]
-    behavioral = df[df[:,2]==3]
+        # ----------------------------------------------------------------------
+        # check timestampes are correct
+        for i in range(len(input_label)-1):
+            try:
+                assert input_label.iloc[i, 4] == input_label.iloc[i+1, 3]
+            except:
+                if input_label.iloc[i+1, 3] == 0:
+                    pass
+                else:
+                    print(f'line {i} has problem: {input_label.iloc[i, 4]}, {input_label.iloc[i+1, 3]}')
 
-    # sessions = ["20201222_01", "20201222_02", "20201222_03", "20201222_04", "20201222_05", "20201222_06", "20201222_07", "20201222_08", "20201222_09", "20201222_10", "20201222_11", "20201222_12", "20201222_13", "20201222_14"]
-    # clp_num = [34, 118, 39, 107, 41, 29, 79, 71, 80, 60, 56, 42, 46, 55]
+        # ----------------------------------------------------------------------
+        # process sessions and clip number, initialize output
+        sessions = [f'{date}_{session_idx+1:02d}' for session_idx in range(session_num[date_idx])]
+        print(sessions)
+        clip_num = [session_info[session_info['session']==s]['clip_num'].values[0] for s in sessions]
+        print(clip_num)
+        output_label = np.zeros([np.sum(clip_num), 6], dtype=object)
+        print(f'output label shape {output_label.shape}')
+        print()
 
-    # sessions = ["20201229_01", "20201229_02", "20201229_03", "20201229_04", "20201229_05", "20201229_06"]
-    # clp_num = [63, 74, 206, 43, 80, 74]
+        # ----------------------------------------------------------------------
+        # generate clip-level labels for affective
+        print('affective:')
+        in_aff_label = input_label[input_label.iloc[:,2]==1]
+        idx = 0
+        for session_idx in range(len(sessions)):
+            aff_session_label = in_aff_label[in_aff_label.iloc[:,0]==sessions[session_idx]]
+            # print(aff_session_label)
+            # print(aff_session_label.shape)
+            # print()
 
-    # sessions = ["20210105_01", "20210105_02", "20210105_03", "20210105_04", "20210105_05", "20210105_06", "20210105_07", "20210105_08", "20210105_09", "20210105_10", "20210105_11", "20210105_12", "20210105_13", "20210105_14"]
-    # clp_num = [60, 81, 62, 92, 93, 52, 47, 65, 34, 123, 53, 32, 21, 24]
+            for clip_idx in range(clip_num[session_idx]):
+                # print(f'session {sessions[session_idx]}, clip {clip_idx}')
+                clip_begin = clip_idx * 32 / 15
+                clip_end = clip_begin + 32 / 15
+                # print(np.round(clip_begin, 1), np.round(clip_end, 1))
+                # print()
 
-    sessions = ["20210309_01", "20210309_02", "20210309_03", "20210309_04", "20210309_05", "20210309_06", "20210309_07", "20210309_08", "20210309_09"]
-    clp_num = [579, 332, 347, 1076, 207, 551, 625, 197, 608]
+                for row_idx in range(len(aff_session_label)):
+                    row = aff_session_label.iloc[row_idx,:].values
+                    # print(row)
+                    if row[3] <= clip_begin < row[4]:
+                        clip_begin_range = row[3:]
+                    if row[3] <= clip_end < row[4]:
+                        clip_end_range = row[3:]
+                if clip_begin_range[-1] == clip_end_range[-1]:
+                    output_label[idx,:3] = [sessions[session_idx], int(clip_idx+1), np.around((clip_begin_range[-1] - 1) / 4, 4)]
+                    idx += 1
+                else:
+                    l1 = clip_begin_range[1] - clip_begin
+                    l2 = clip_end - clip_end_range[0]
+                    score = (l1 * clip_begin_range[-1] + l2 * clip_end_range[-1]) / (l1 + l2)
+                    output_label[idx,:3] = [sessions[session_idx], int(clip_idx+1), np.around((score - 1) / 4, 4)]
+                    idx += 1
 
-    out = np.zeros([np.sum(clp_num), 6])
-    print(out.shape)
+        # ----------------------------------------------------------------------
+        # generate clip-level labels for visual
+        print('visual:')
+        in_vis_label = input_label[input_label.iloc[:,2]==2]
+        idx = 0
+        for session_idx in range(len(sessions)):
+            vis_session_label = in_vis_label[in_vis_label.iloc[:,0]==sessions[session_idx]]
 
-    # affective
-    idx = 0
-    for s in range(len(sessions)):
-        affective_session = affective[affective[:,0]==sessions[s]]
-        for c in range(clp_num[s]):
-            # print(f'session {sessions[s]}, clip {c}')
-            clp_begin = c * 32 / 3
-            clp_end = clp_begin + 32 / 3
-            # print(clp_begin, clp_end)
+            for clip_idx in range(clip_num[session_idx]):
+                clip_begin = clip_idx * 32 / 15
+                clip_end = clip_begin + 32 / 15
 
-            for row in affective_session:
-                if row[3]<=clp_begin<row[4]:
-                    clp_begin_range = row[3:]
-                if row[3]<=clp_end<row[4]:
-                    clp_end_range = row[3:]
-            if clp_begin_range[-1] == clp_end_range[-1]:
-                out[idx,:3] = [s+1, c+1, (clp_begin_range[-1] - 1) / 4]
-                idx += 1
-            else:
-                l1 = clp_begin_range[1] - clp_begin
-                l2 = clp_end - clp_end_range[0]
-                score = (l1 * clp_begin_range[-1] + l2 * clp_end_range[-1]) / (l1 + l2)
-                out[idx,:3] = [s+1, c+1, (score - 1) / 4]
-                idx += 1
+                for row_idx in range(len(vis_session_label)):
+                    row = vis_session_label.iloc[row_idx,:].values
+                    if row[3]<=clip_begin<row[4]:
+                        clip_begin_range = row[3:]
+                    if row[3]<=clip_end<row[4]:
+                        clip_end_range = row[3:]
+                if clip_begin_range[-1] == clip_end_range[-1]:
+                    output_label[idx,3] = np.around((clip_begin_range[-1] - 1) / 4, 4)
+                    idx += 1
+                else:
+                    l1 = clip_begin_range[1] - clip_begin
+                    l2 = clip_end - clip_end_range[0]
+                    score = (l1 * clip_begin_range[-1] + l2 * clip_end_range[-1]) / (l1 + l2)
+                    output_label[idx,3] = np.around((score - 1) / 4, 4)
+                    idx += 1
 
-    # visual
-    idx = 0
-    for s in range(len(sessions)):
-        visual_session = visual[visual[:,0]==sessions[s]]
-        for c in range(clp_num[s]):
-            # print(f'session {sessions[s]}, clip {c}')
-            clp_begin = c * 32 / 3
-            clp_end = clp_begin + 32 / 3
-            # print(clp_begin, clp_end)
+        # ----------------------------------------------------------------------
+        # generate clip-level labels for visual
+        print('behavior:')
+        in_beh_label = input_label[input_label.iloc[:,2]==3]
+        idx = 0
+        for session_idx in range(len(sessions)):
+            beh_session_label = in_beh_label[in_beh_label.iloc[:,0]==sessions[session_idx]]
 
-            for row in visual_session:
-                if row[3]<=clp_begin<row[4]:
-                    clp_begin_range = row[3:]
-                if row[3]<=clp_end<row[4]:
-                    clp_end_range = row[3:]
-            if clp_begin_range[-1] == clp_end_range[-1]:
-                out[idx,3] = (clp_begin_range[-1] - 1) / 4
-                idx += 1
-            else:
-                l1 = clp_begin_range[1] - clp_begin
-                l2 = clp_end - clp_end_range[0]
-                score = (l1 * clp_begin_range[-1] + l2 * clp_end_range[-1]) / (l1 + l2)
-                out[idx,3] = (score - 1) / 4
-                idx += 1
+            for clip_idx in range(clip_num[session_idx]):
+                clip_begin = clip_idx * 32 / 15
+                clip_end = clip_begin + 32 / 15
 
-    # behavioral
-    idx = 0
-    for s in range(len(sessions)):
-        behavioral_session = behavioral[behavioral[:,0]==sessions[s]]
-        for c in range(clp_num[s]):
-            # print(f'session {sessions[s]}, clip {c}')
-            clp_begin = c * 32 / 3
-            clp_end = clp_begin + 32 / 3
-            # print(clp_begin, clp_end)
+                for row_idx in range(len(beh_session_label)):
+                    row = beh_session_label.iloc[row_idx,:].values
+                    if row[3]<=clip_begin<row[4]:
+                        clip_begin_range = row[3:]
+                    if row[3]<=clip_end<row[4]:
+                        clip_end_range = row[3:]
+                if clip_begin_range[-1] == clip_end_range[-1]:
+                    output_label[idx,4] = np.around((clip_begin_range[-1] - 1) / 4, 4)
+                    idx += 1
+                else:
+                    l1 = clip_begin_range[1] - clip_begin
+                    l2 = clip_end - clip_end_range[0]
+                    score = (l1 * clip_begin_range[-1] + l2 * clip_end_range[-1]) / (l1 + l2)
+                    output_label[idx,4] = np.around((score - 1) / 4, 4)
+                    idx += 1
 
-            for row in behavioral_session:
-                if row[3]<=clp_begin<row[4]:
-                    clp_begin_range = row[3:]
-                if row[3]<=clp_end<row[4]:
-                    clp_end_range = row[3:]
-            if clp_begin_range[-1] == clp_end_range[-1]:
-                out[idx,4] = (clp_begin_range[-1] - 1) / 4
-                idx += 1
-            else:
-                l1 = clp_begin_range[1] - clp_begin
-                l2 = clp_end - clp_end_range[0]
-                score = (l1 * clp_begin_range[-1] + l2 * clp_end_range[-1]) / (l1 + l2)
-                out[idx,4] = (score - 1) / 4
-                idx += 1
+        cols = ['session', 'clip', 'affective', 'visual', 'behavior', 'overall']
+        output_label = pd.DataFrame(output_label, columns=cols)
+        output_label['overall'] = pd.to_numeric((output_label['affective'] + output_label['visual'] + output_label['behavior']) / 3).round(4)
 
-    out[:,-1] = (out[:,2] + out[:,3] + out[:,4]) / 3
-    out[:,2:] = np.around(out[:,2:], decimals=4)
+        output_label.to_csv(output_label_path, index=False)
+
+def concate_label(input_path, output_path):
+    cols = ['session', 'clip', 'affective', 'visual', 'behavior', 'overall']
+    output_label = pd.DataFrame(columns=cols)
+    processed_label_files = natsorted(os.listdir(input_path))
+    for file in processed_label_files:
+        if file.endswith('.csv'):
+            label = pd.read_csv(input_path + file)
+            print(len(label))
+            output_label = pd.concat([output_label, label], axis=0)
+    output_label.to_csv(output_path + 'labels_new.csv', index=False)
 
 
-    with open(output_path+"20210309.csv", "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerows(out)
+if __name__ == '__main__':
+    start_end_path = 'data/annotations/start_end/'
+    processed_path = 'data/annotations/processed_new/'
+    concate_path = 'data/annotations/'
 
-
-if __name__ == "__main__":
-    input_path = 'data/annotations/start_end/'
-    output_path = 'data/annotations/processed_new/'
-    generate_clip_label(input_path, output_path)
+    generate_clip_label_new(start_end_path, processed_path)
+    concate_label(processed_path, concate_path)

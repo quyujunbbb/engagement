@@ -1,6 +1,5 @@
 import os
 import time
-from pathlib import Path
 
 import numpy as np
 import torch
@@ -11,93 +10,65 @@ from torch.autograd import Variable
 from models.resnet import i3_res50
 
 
-def load_frame(frame_file):
-    data = Image.open(frame_file)
-    data = data.resize((340, 256), Image.ANTIALIAS)
-    data = np.array(data)
-    data = data.astype(float)
-    data = (data * 2 / 255) - 1
-    assert (data.max() <= 1.0)
-    assert (data.min() >= -1.0)
-    return data
+def load_image(img_path):
+    img = Image.open(img_path)
+    img = img.resize((224, 224), Image.ANTIALIAS)
+    img = np.array(img)
+    img = img.astype(float)
+    img = (img * 2 / 255) - 1
+    assert (img.max() <= 1.0)
+    assert (img.min() >= -1.0)
+
+    return img
 
 
-def load_rgb_batch(frames_dir, rgb_files, frame_indices):
-    batch_data = np.zeros(frame_indices.shape + (256, 340, 3))
-    for i in range(frame_indices.shape[0]):
-        for j in range(frame_indices.shape[1]):
-            batch_data[i, j, :, :, :] = load_frame(
-                os.path.join(frames_dir, rgb_files[frame_indices[i][j]]))
-    return batch_data
+def load_batch(path, files, chunk_size, frame_indices):
+    batch_img = np.zeros((1, chunk_size, 224, 224, 3))
+    for i in range(chunk_size):
+        img_path = path + files[frame_indices[i]]
+        batch_img[0, i, :, :, :] = load_image(img_path)
+
+    return batch_img
 
 
-def forward_batch(i3d, b_data):
-    b_data = b_data.transpose([0, 4, 1, 2, 3])
-    b_data = torch.from_numpy(b_data)  # [b,c,t,h,w]
+def forward_batch(net, batch_img):
+    batch_img = batch_img.transpose([0, 4, 1, 2, 3])  # (1, 3, 32, 224, 224)
+    batch_img = torch.from_numpy(batch_img)  # [bs, c, t, h, w]
     with torch.no_grad():
-        b_data = Variable(b_data.cuda()).float()
-        inp = {'frames': b_data}
-        features = i3d(inp)
+        batch_img = Variable(batch_img.cuda()).float()
+        inp = {'frames': batch_img}
+        features = net(inp)
+
     return features.cpu().numpy()
 
 
-def r3d_features(net, image_folder_path):
+def r3d_features(net, image_folder_path, r3d_feature_path):
+    image_files = natsorted(os.listdir(image_folder_path))
+    total_frame = len(image_files)
+    # print(f'total frame: {total_frame}')
+
     chunk_size = 32
+    frequency = 32
+    batch_size = 1
 
-    rgb_files = natsorted([i for i in os.listdir(frames_dir)])
-    frame_cnt = len(rgb_files)
-    print(f'total frame: {frame_cnt}')
-    rgb_files = rgb_files[0:frame_cnt:5]
-    frame_cnt = len(rgb_files)
-    print(f'sampled frame: {frame_cnt}')
-
-    assert (frame_cnt > chunk_size)
-    clipped_length = ((frame_cnt - chunk_size) // frequency) * frequency
-    frame_indices = []
-    for i in range(clipped_length // frequency + 1):
-        frame_indices.append(
-            [j for j in range(i * frequency, i * frequency + chunk_size)])
-    frame_indices = np.array(frame_indices)
-    chunk_num = frame_indices.shape[0]
-    batch_num = int(np.ceil(chunk_num / batch_size))
-    frame_indices = np.array_split(frame_indices, batch_num, axis=0)
-    print(f'batch size: {batch_size}  '
-          f'batch number: {batch_num}  '
-          f'clip number: {chunk_num}  ')
-    # print(f'frame_indices\n{frame_indices}')
-
-    full_features = [[]]
-    for batch_id in range(batch_num):
-        batch_data = load_rgb_batch(frames_dir, rgb_files,
-                                    frame_indices[batch_id])
-        batch_data = batch_data[:, :, 16:240, 58:282, :]
-        assert (batch_data.shape[-2] == 224)
-        assert (batch_data.shape[-3] == 224)
-        temp = forward_batch(i3d, batch_data)
-        # print(f'feature {np.shape(temp)}')
-        full_features[0].append(temp)
-
-    # print(f'full_features size {np.shape(full_features)}')
-    full_features = [np.concatenate(i, axis=0) for i in full_features]
-    # print(f'full_features size {np.shape(full_features)}')
-    # full_features = [np.expand_dims(i, axis=0) for i in full_features]
-    # print(f'full_features size {np.shape(full_features)}')
-    full_features = np.concatenate(full_features, axis=0)
-    # print(f'full_features size {np.shape(full_features)}')
-    # full_features = full_features[:, :, :, 0, 0, 0]
-    # print(f'full_features size {np.shape(full_features)}')
-    # full_features = np.array(full_features).transpose([1, 0, 2])
-    # print(f'full_features size {np.shape(full_features)}')
-
-    return full_features
+    clip_num = int(total_frame / 32)
+    for clip in range(clip_num):
+        start_frame = clip * chunk_size
+        end_frame = start_frame + chunk_size
+        frame_indices = np.arange(start_frame, end_frame)
+        batch_data = load_batch(image_folder_path, image_files, chunk_size,
+                                frame_indices)
+        features = forward_batch(net, batch_data)  # (1, 1024, 4, 14, 14)
+        features = features[0]  # (1024, 4, 14, 14)
+        np.save(f'{r3d_feature_path}{image_folder}_clip{clip}', features)
 
 
 if __name__ == "__main__":
     print("Extract R3D features")
 
     weight_path = 'pretrained/i3d_r50_kinetics.pth'
-    session_folder_path = 'data/images/'
-    r3d_feature_path = 'features/r3d_features/'
+    session_folder_path = 'data/images_crop/'
+    r3d_feature_path = 'features/r3d_features_new/'
     os.makedirs(r3d_feature_path, exist_ok=True)
 
     net = i3_res50(400, weight_path)
@@ -110,8 +81,6 @@ if __name__ == "__main__":
         print(image_folder_path)
 
         startime = time.time()
-        features = r3d_features(net, image_folder_path)
-        # np.save(r3d_feature_path + "/" + image_folder, features)
-        # print(f'extract R3D features {np.shape(features)} '
-        #       f'in {time.time() - startime:.3f}s')
+        r3d_features(net, image_folder_path, r3d_feature_path)
+        print(f'Done in {time.time() - startime:.3f}s')
         break

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import pandas as pd
 from natsort import natsorted
-from requests import session
+
 
 class process_videos():
 
@@ -75,6 +75,23 @@ class process_videos():
 
 
 class process_images():
+    
+    def session_info(input_path):
+        print('session_info')
+        cols=['session', 'total_frame', 'sampled_frame', 'clip_num']
+        info = []
+        sessions = natsorted(os.listdir(input_path))
+        for session in sessions:
+            session_path = input_path + session + '/'
+            images = natsorted(os.listdir(session_path))
+            total_frame = len(images)
+            clip_num = int(len(images)/32)
+            sampled_frame = clip_num * 32
+            info.append([session, total_frame, sampled_frame, clip_num])
+        info = pd.DataFrame(info, columns=cols)
+        print(info)
+        # info.to_csv('data/session_info_new.csv', index=False)
+        print(info.sum())
 
     def image2np(input_path, output_path):
         print('image2np')
@@ -92,18 +109,15 @@ class process_images():
         print(images_out.shape)
         np.save(output_path, images_out)
     
-    def crop_images(input_path, output_path, box_path):
+    def crop_images(input_path, output_path, crop_boxes_path):
         print('crop_images')
-        boxes = pd.read_csv(box_path)
+        boxes = pd.read_csv(crop_boxes_path)
         sessions = natsorted(os.listdir(input_path))
         for i, session in enumerate(sessions):
             session_path = input_path + session + '/'
+            output_path = output_path + session + '/'
+            os.makedirs(output_path, exist_ok=True)
             # print(session_path)
-            images = natsorted(os.listdir(session_path))
-            img_1 = cv2.imread(session_path + images[200])
-            img_2 = cv2.imread(session_path + images[500])
-            img_3 = cv2.imread(session_path + images[800])
-
             box = boxes.iloc[i,:]
             center = box['x1'] + (box['x2'] - box['x1']) / 2
             x_left = int(center - 540)
@@ -115,36 +129,73 @@ class process_images():
                 x_left = 1920 - 1080
                 x_right = 1920
             print(x_left, x_right)
-            img_1 = img_1[:, x_left:x_right, :]
-            img_2= img_2[:, x_left:x_right, :]
-            img_3 = img_3[:, x_left:x_right, :]
-            # cv2.imwrite(output_path + session + '_' + images[200], img_1)
-            # cv2.imwrite(output_path + session + '_' + images[500], img_2)
-            # cv2.imwrite(output_path + session + '_' + images[800], img_3)
-    
-    def session_info(input_path):
-        print('session_info')
-        cols=['session', 'total_frame', 'clip_num']
-        info = []
-        sessions = natsorted(os.listdir(input_path))
-        for session in sessions:
-            session_path = input_path + session + '/'
             images = natsorted(os.listdir(session_path))
-            total_frame = len(images)
-            clip_num = int(len(images)/32)
-            info.append([session, total_frame, clip_num])
-        info = pd.DataFrame(info, columns=cols)
-        print(info)
-        info.to_csv('data/session_info_new.csv', index=False)
+            for image in images:
+                img = cv2.imread(session_path + image)
+                img = img[:, x_left:x_right, :]
+                cv2.imwrite(output_path + image, img)
+
+            break
+
+
+class process_bytetrack():
+
+    def process_bounding_boxes(bounding_box_path):
+        print('process_bounding_boxes:')
+
+        box_files = natsorted(os.listdir(bounding_box_path))
+        clos = ['frame', 'id', 'x1', 'y1', 'x2', 'y2']
+
+        for box_file in box_files:
+            box_file_path = bounding_box_path + box_file
+            boxes = pd.read_csv(box_file_path, names=clos)
+            print(box_file_path)
+            print(boxes['id'].value_counts())
+            print(len(boxes))
+            print()
+
+            # --------------------------------------------------------------
+            # delete id count < thr
+            # frame_num = boxes['frame'].max()
+            # thr = int(frame_num * 0.1)
+            # print(f'frame_num {frame_num}, thr {thr}')
+            # boxes = boxes.groupby('id').filter(lambda x : len(x)>thr).reset_index(drop=True)
+            # print(boxes['id'].value_counts())
+            # print(len(boxes))
+            # print()
+
+            # --------------------------------------------------------------
+            # delete rows based on drop_ids
+            # drop_ids = []
+            # for drop_id in drop_ids:
+            #     boxes = boxes.drop(boxes[boxes['id'] == drop_id].index)
+            # print(boxes['id'].value_counts())
+            # print(len(boxes))
+            # print()
+
+            # --------------------------------------------------------------
+            # change id
+            # boxes['id'][boxes['id'] == 5] = 0
+            # boxes['id'][boxes['id'] == 2] = 1
+            # boxes['id'][boxes['id'] == 10] = 2
+            # print(boxes['id'].value_counts())
+            # print(len(boxes))
+            # print()
+            # boxes.to_csv(box_file_path, index=False, header=False)
 
 
 if __name__ == '__main__':
     video_path = 'data/videos/'
     image_path = 'data/images/'
-    box_path = 'data/crop_boxes.csv'
+    cropped_image_path = 'data/images_crop/'
+    crop_boxes_path = 'data/crop_boxes.csv'
+    bounding_box_path = 'features/bytetrack_new/boxes/'
+
+    # --------------------------------------------------------------------------
     # process_videos.video_info(video_path)
     # process_videos.video2images(video_path, image_path)
 
+    # --------------------------------------------------------------------------
     # image2np
     # image_folders = ['20201222_01', '20201222_02']
     # for image_folder in image_folders:
@@ -153,7 +204,15 @@ if __name__ == '__main__':
     #     process_images.image2np(image_path, numpy_path)
 
     # crop_images
-    # process_images.crop_images(image_path, 'data/cropped/', box_path)
+    # process_images.crop_images(image_path, cropped_image_path, crop_boxes_path)
+    # img = cv2.imread('data/images_crop/20201222_01/xxxxx.jpg')
+    # print(img.shape)
+    # img = img[355:1106, 237:440, :]  # [y1:y2, x1:x2, :]
+    # cv2.imwrite('xxxxx.jpg', img)
 
     # session_info
-    process_images.session_info(image_path)
+    # process_images.session_info(image_path)
+
+    # --------------------------------------------------------------------------
+    # bounding box
+    # process_bytetrack.process_bounding_boxes(bounding_box_path)

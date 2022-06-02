@@ -296,8 +296,8 @@ class I3Res50(nn.Module):
         return x
 
     def forward(self, batch):
-        if batch['frames'].dim() == 5:
-            feat = self.forward_single(batch['frames'])
+        feat = self.forward_single(batch['frames'])
+
         return feat
 
 
