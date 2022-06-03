@@ -42,16 +42,14 @@ def forward_batch(net, batch_img):
     return features.cpu().numpy()
 
 
-def r3d_features(net, image_folder_path, r3d_feature_path):
+def r3d_features(net, image_folder_path, r3d_output_path):
     image_files = natsorted(os.listdir(image_folder_path))
+
     total_frame = len(image_files)
-    # print(f'total frame: {total_frame}')
-
-    chunk_size = 32
-    frequency = 32
-    batch_size = 1
-
     clip_num = int(total_frame / 32)
+    print(f'total frame: {total_frame}, clip num: {clip_num}')
+    chunk_size = 32
+
     for clip in range(clip_num):
         start_frame = clip * chunk_size
         end_frame = start_frame + chunk_size
@@ -60,7 +58,7 @@ def r3d_features(net, image_folder_path, r3d_feature_path):
                                 frame_indices)
         features = forward_batch(net, batch_data)  # (1, 1024, 4, 14, 14)
         features = features[0]  # (1024, 4, 14, 14)
-        np.save(f'{r3d_feature_path}{image_folder}_clip{clip}', features)
+        np.save(f'{r3d_output_path}{clip}', features)
 
 
 if __name__ == "__main__":
@@ -77,10 +75,11 @@ if __name__ == "__main__":
 
     image_folders = natsorted(os.listdir(session_folder_path))
     for image_folder in image_folders:
+        print(f'processing {image_folder}')
         image_folder_path = session_folder_path + image_folder + "/"
-        print(image_folder_path)
+        r3d_output_path = r3d_feature_path + image_folder +'/'
+        os.makedirs(r3d_output_path, exist_ok=True)
 
         startime = time.time()
-        r3d_features(net, image_folder_path, r3d_feature_path)
-        print(f'Done in {time.time() - startime:.3f}s')
-        break
+        r3d_features(net, image_folder_path, r3d_output_path)
+        print(f'Done in {time.time() - startime:.3f}s\n')

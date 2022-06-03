@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchinfo import summary
 
-from models import nets
+from models import nets_old
 from utils import prepare_data
 
 
@@ -195,11 +195,11 @@ if __name__ == '__main__':
     logger.add(f'{output_path}/log.txt', format='{message}', level='INFO')
 
     models = {
-        'Nonlocal_FC3_Reg'   : nets.Nonlocal_FC3_Reg,
-        'Nonlocal_FC1_Reg'   : nets.Nonlocal_FC1_Reg,
-        'Nonlocal_FC1_Class' : nets.Nonlocal_FC1_Class,
-        'FC3_Reg'            : nets.FC3_Reg,
-        'FC1_Reg'            : nets.FC1_Reg
+        'Nonlocal_FC3_Reg'   : nets_old.Nonlocal_FC3_Reg,
+        'Nonlocal_FC1_Reg'   : nets_old.Nonlocal_FC1_Reg,
+        'Nonlocal_FC1_Class' : nets_old.Nonlocal_FC1_Class,
+        'FC3_Reg'            : nets_old.FC3_Reg,
+        'FC1_Reg'            : nets_old.FC1_Reg
     }
     assert (args.model in list(models.keys()))
     model = models[args.model]

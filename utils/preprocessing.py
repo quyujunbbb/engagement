@@ -109,15 +109,18 @@ class process_images():
         print(images_out.shape)
         np.save(output_path, images_out)
     
-    def crop_images(input_path, output_path, crop_boxes_path):
-        print('crop_images')
+    def crop_images(input_path, output_root_path, crop_boxes_path):
+        print('crop_images:')
         boxes = pd.read_csv(crop_boxes_path)
         sessions = natsorted(os.listdir(input_path))
+        sessions = ['20210309_04', '20210309_05', '20210309_06', '20210309_07', '20210309_08', '20210309_09']
+
         for i, session in enumerate(sessions):
             session_path = input_path + session + '/'
-            output_path = output_path + session + '/'
+            output_path = output_root_path + session + '/'
             os.makedirs(output_path, exist_ok=True)
-            # print(session_path)
+            print(f'{i+1}/{len(sessions)}: {session_path} --> {output_path}')
+
             box = boxes.iloc[i,:]
             center = box['x1'] + (box['x2'] - box['x1']) / 2
             x_left = int(center - 540)
@@ -129,13 +132,12 @@ class process_images():
                 x_left = 1920 - 1080
                 x_right = 1920
             print(x_left, x_right)
+
             images = natsorted(os.listdir(session_path))
             for image in images:
                 img = cv2.imread(session_path + image)
                 img = img[:, x_left:x_right, :]
                 cv2.imwrite(output_path + image, img)
-
-            break
 
 
 class process_bytetrack():
@@ -204,7 +206,7 @@ if __name__ == '__main__':
     #     process_images.image2np(image_path, numpy_path)
 
     # crop_images
-    # process_images.crop_images(image_path, cropped_image_path, crop_boxes_path)
+    process_images.crop_images(image_path, cropped_image_path, crop_boxes_path)
     # img = cv2.imread('data/images_crop/20201222_01/xxxxx.jpg')
     # print(img.shape)
     # img = img[355:1106, 237:440, :]  # [y1:y2, x1:x2, :]
