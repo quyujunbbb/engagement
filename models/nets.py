@@ -92,6 +92,7 @@ class NonLocalBlock(nn.Module):
 
 
 class MyModel(nn.Module):
+    """Non-local + FC + """
 
     def __init__(self):
         super(MyModel, self).__init__()

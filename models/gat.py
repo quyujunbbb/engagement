@@ -5,7 +5,13 @@ import torch.nn.functional as F
 
 class GraphAttentionLayer(nn.Module):
     """Simple GAT layer"""
-    def __init__(self, input_size, output_size, dropout, leakyrelu_alpha, concat=True):
+
+    def __init__(self,
+                 input_size,
+                 output_size,
+                 dropout,
+                 leakyrelu_alpha,
+                 concat=True):
         super(GraphAttentionLayer, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
@@ -15,7 +21,7 @@ class GraphAttentionLayer(nn.Module):
 
         self.W = nn.Parameter(torch.empty(size=(input_size, output_size)))
         nn.init.xavier_uniform_(self.W.data, gain=1.414)
-        self.a = nn.Parameter(torch.empty(size=(2*output_size, 1)))
+        self.a = nn.Parameter(torch.empty(size=(2 * output_size, 1)))
         nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
         self.leakyrelu = nn.LeakyReLU(self.leakyrelu_alpha)
@@ -26,7 +32,7 @@ class GraphAttentionLayer(nn.Module):
         e = self._compute_attention_coefficients(Wh)
 
         # masked attention
-        zero_vec = -9e15*torch.ones_like(e)
+        zero_vec = -9e15 * torch.ones_like(e)
         e = torch.where(adj > 0, e, zero_vec)
         # normalized attention coefficients alpha
         alpha = F.softmax(e, dim=1)
@@ -47,11 +53,13 @@ class GraphAttentionLayer(nn.Module):
         return self.leakyrelu(e)
 
     def __repr__(self):
-        return self.__class__.__name__ + ' (' + str(self.input_size) + ' -> ' + str(self.output_size) + ')'
+        return self.__class__.__name__ + ' (' + str(
+            self.input_size) + ' -> ' + str(self.output_size) + ')'
 
 
 class SpecialSpmmFunction(torch.autograd.Function):
     """Special function for only sparse region backpropataion layer."""
+
     @staticmethod
     def forward(ctx, indices, values, shape, b):
         assert indices.requires_grad == False
@@ -74,13 +82,20 @@ class SpecialSpmmFunction(torch.autograd.Function):
 
 
 class SpecialSpmm(nn.Module):
+
     def forward(self, indices, values, shape, b):
         return SpecialSpmmFunction.apply(indices, values, shape, b)
 
-    
+
 class SpGraphAttentionLayer(nn.Module):
     """Sparse version GAT layer"""
-    def __init__(self, input_size, output_size, dropout, leakyrelu_alpha, concat=True):
+
+    def __init__(self,
+                 input_size,
+                 output_size,
+                 dropout,
+                 leakyrelu_alpha,
+                 concat=True):
         super(SpGraphAttentionLayer, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
@@ -89,8 +104,8 @@ class SpGraphAttentionLayer(nn.Module):
 
         self.W = nn.Parameter(torch.zeros(size=(input_size, output_size)))
         nn.init.xavier_normal_(self.W.data, gain=1.414)
-                
-        self.a = nn.Parameter(torch.zeros(size=(1, 2*output_size)))
+
+        self.a = nn.Parameter(torch.zeros(size=(1, 2 * output_size)))
         nn.init.xavier_normal_(self.a.data, gain=1.414)
 
         self.dropout = nn.Dropout(dropout)
@@ -115,7 +130,8 @@ class SpGraphAttentionLayer(nn.Module):
         assert not torch.isnan(edge_e).any()
         # edge_e: E
 
-        e_rowsum = self.special_spmm(edge, edge_e, torch.Size([N, N]), torch.ones(size=(N,1), device=dv))
+        e_rowsum = self.special_spmm(edge, edge_e, torch.Size([N, N]),
+                                     torch.ones(size=(N, 1), device=dv))
         # e_rowsum: N x 1
 
         edge_e = self.dropout(edge_e)
@@ -124,7 +140,7 @@ class SpGraphAttentionLayer(nn.Module):
         h_prime = self.special_spmm(edge, edge_e, torch.Size([N, N]), h)
         assert not torch.isnan(h_prime).any()
         # h_prime: N x out
-        
+
         h_prime = h_prime.div(e_rowsum)
         # h_prime: N x out
         assert not torch.isnan(h_prime).any()
@@ -137,20 +153,32 @@ class SpGraphAttentionLayer(nn.Module):
             return h_prime
 
     def __repr__(self):
-        return self.__class__.__name__ + ' (' + str(self.input_size) + ' -> ' + str(self.output_size) + ')'
+        return self.__class__.__name__ + ' (' + str(
+            self.input_size) + ' -> ' + str(self.output_size) + ')'
 
 
 class GAT(nn.Module):
     """Dense GAT"""
+
     def __init__(self, nfeat, nhid, nclass, dropout, leakyrelu_alpha, nheads):
         super(GAT, self).__init__()
         self.dropout = dropout
 
-        self.attentions = [GraphAttentionLayer(nfeat, nhid, dropout=dropout, leakyrelu_alpha=leakyrelu_alpha, concat=True) for _ in range(nheads)]
+        self.attentions = [
+            GraphAttentionLayer(nfeat,
+                                nhid,
+                                dropout=dropout,
+                                leakyrelu_alpha=leakyrelu_alpha,
+                                concat=True) for _ in range(nheads)
+        ]
         for i, attention in enumerate(self.attentions):
             self.add_module('attention_{}'.format(i), attention)
 
-        self.out_att = GraphAttentionLayer(nhid * nheads, nclass, dropout=dropout, leakyrelu_alpha=leakyrelu_alpha, concat=False)
+        self.out_att = GraphAttentionLayer(nhid * nheads,
+                                           nclass,
+                                           dropout=dropout,
+                                           leakyrelu_alpha=leakyrelu_alpha,
+                                           concat=False)
 
     def forward(self, x, adj):
         x = F.dropout(x, self.dropout, training=self.training)
@@ -162,22 +190,25 @@ class GAT(nn.Module):
 
 class SpGAT(nn.Module):
     """Sparse GAT"""
+
     def __init__(self, nfeat, nhid, nclass, dropout, leakyrelu_alpha, nheads):
         super(SpGAT, self).__init__()
         self.dropout = dropout
 
-        self.attentions = [SpGraphAttentionLayer(nfeat, 
-                                                 nhid, 
-                                                 dropout=dropout, 
-                                                 leakyrelu_alpha=leakyrelu_alpha, 
-                                                 concat=True) for _ in range(nheads)]
+        self.attentions = [
+            SpGraphAttentionLayer(nfeat,
+                                  nhid,
+                                  dropout=dropout,
+                                  leakyrelu_alpha=leakyrelu_alpha,
+                                  concat=True) for _ in range(nheads)
+        ]
         for i, attention in enumerate(self.attentions):
             self.add_module('attention_{}'.format(i), attention)
 
-        self.out_att = SpGraphAttentionLayer(nhid * nheads, 
-                                             nclass, 
-                                             dropout=dropout, 
-                                             leakyrelu_alpha=leakyrelu_alpha, 
+        self.out_att = SpGraphAttentionLayer(nhid * nheads,
+                                             nclass,
+                                             dropout=dropout,
+                                             leakyrelu_alpha=leakyrelu_alpha,
                                              concat=False)
 
     def forward(self, x, adj):
@@ -189,7 +220,12 @@ class SpGAT(nn.Module):
 
 
 if __name__ == "__main__":
-    model = GAT(nfeat=1024, nhid=64, nclass=10, dropout=0.5, leakyrelu_alpha=0.2, nheads=8)
+    model = GAT(nfeat=1024,
+                nhid=64,
+                nclass=10,
+                dropout=0.5,
+                leakyrelu_alpha=0.2,
+                nheads=3)
     model = model.cuda()
     print(model)
 
