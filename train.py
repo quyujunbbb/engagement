@@ -2,6 +2,7 @@ import argparse
 import os
 import time
 
+import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
@@ -14,8 +15,8 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchinfo import summary
 
-from models import nets_old
-from utils import prepare_data
+from models import nets
+from utils.bheh import create_bheh
 
 
 def make_parser():
@@ -68,65 +69,70 @@ def save_results(res):
     fig.savefig(f'results/figs/{timestamp}_smooth.png')
 
 
-def train(model, timestamp, output_path):
-    ckpt_save_path = f'{output_path}ckpts/'
-    os.makedirs(ckpt_save_path, exist_ok=True)
+def train(model, cfg, timestamp, output_path):
+    # ckpt_save_path = f'{output_path}ckpts/'
+    # os.makedirs(ckpt_save_path, exist_ok=True)
     writer = SummaryWriter('runs')
 
     fold_num = 5
-    criterion_mse = nn.MSELoss()
-    criterion_mae = nn.L1Loss()
-    res = []
+    data_list = np.load('data/data_list.npy', allow_pickle=True)
 
-    train_data, test_data = dataset()
-    train_loader = DataLoader(dataset=train_data,
-                              batch_size=batch_size,
-                              shuffle=True)
-    test_loader = DataLoader(dataset=test_data,
-                             batch_size=batch_size,
-                             shuffle=False)
+    res_overall = {}
+    for fold in range(fold_num):
+        test_files = data_list[fold]
+        train_list = np.delete(data_list, fold, axis=0)
+        train_files = [item for row in train_list for item in row]
+        logger.info(
+            f'fold {fold}: train_num={len(train_files)}, test_num={len(test_files)}'
+        )
 
-    net = model()
-    if torch.cuda.is_available():
-        net = nn.DataParallel(net)
-        net.cuda()
-    opt = torch.optim.Adam(net.parameters(), lr=learning_rate)
-    # opt = torch.optim.SGD(net.parameters(), lr=0.1, momentum=0.9)
-    scheduler = StepLR(opt, step_size=step_size, gamma=gamma)
-    # ++++++++++++++++++++++++++++++++++++++++
-    # scaler = amp.GradScaler()
-    # ++++++++++++++++++++++++++++++++++++++++
+        train_data, test_data = create_bheh(train_files, test_files)
+        train_loader = DataLoader(dataset=train_data,
+                                  batch_size=cfg.batch_size,
+                                  shuffle=True,
+                                  num_workers=cfg.num_workers)
+        test_loader = DataLoader(dataset=test_data,
+                                 batch_size=cfg.batch_size,
+                                 shuffle=True,
+                                 num_workers=cfg.num_workers)
 
-    for epoch_index in range(epochs):
-        # -------------------------------------------------------
-        # train
-        startime = time.time()
-        torch.set_grad_enabled(True)
-        net.train()
-        for train_batch_index, (img_batch,
-                                label_batch) in enumerate(train_loader):
-            if torch.cuda.is_available():
-                img_batch = img_batch.cuda().float()
-                label_batch = label_batch.cuda().float()
+        net = model().to(device='cuda')
+        opt = torch.optim.Adam(net.parameters(), lr=cfg.learning_rate)
+        scheduler = StepLR(opt, step_size=cfg.step_size, gamma=cfg.gamma)
+        criterion_mse = nn.MSELoss()
+        criterion_mae = nn.L1Loss()
 
-            # ++++++++++++++++++++++++++++++++++++++++
-            predict = net(img_batch)
-            loss = criterion_mse(predict, label_batch)
-            # if using amp, replace previous two lines with followings
-            # with amp.autocast():
-            #     predict = net(img_batch)
-            #     loss = criterion(predict, label_batch)
-            # ++++++++++++++++++++++++++++++++++++++++
-
-            net.zero_grad()
-            # ++++++++++++++++++++++++++++++++++++++++
-            loss.backward()
-            opt.step()
-            # if using amp, replace previous two lines with followings
-            # scaler.scale(loss).backward()
-            # scaler.step(opt)
-            # scaler.update()
-            # ++++++++++++++++++++++++++++++++++++++++
+        logger.info(
+            f'fold    time   | train_l  test_l |    acc     r2 |    '
+            f'acc  b_acc      p      r     f1    auc'
+        )
+        res = []
+        for epoch in range(cfg.epoch):
+            starttime = time.time()
+            # train
+            torch.set_grad_enabled(True)
+            net.train()
+            for x_batch, y_batch in train_loader:
+                x_batch = x_batch.to(device='cuda')
+                y_batch = y_batch.to(device='cuda')
+                y_pred = net(x_batch)
+                train_loss = criterion_mse(y_pred, y_batch)
+                net.zero_grad()
+                train_loss.backward()
+                opt.step()
+            
+            # test
+            torch.set_grad_enabled(False)
+            net.eval()
+            total_loss = []
+            true_label_list = []
+            pred_label_list = []
+            for x_batch, y_batch in test_loader:
+                x_batch = x_batch.to(device='cuda')
+                y_batch = y_batch.to(device='cuda')
+                y_pred = net(x_batch)
+                loss_mse = criterion_mse(y_pred, y_batch)
+                loss_mae = criterion_mae(y_pred, y_batch)
 
         # -------------------------------------------------------
         # test
@@ -195,26 +201,13 @@ if __name__ == '__main__':
     logger.add(f'{output_path}/log.txt', format='{message}', level='INFO')
 
     models = {
-        'Nonlocal_FC3_Reg'   : nets_old.Nonlocal_FC3_Reg,
-        'Nonlocal_FC1_Reg'   : nets_old.Nonlocal_FC1_Reg,
-        'Nonlocal_FC1_Class' : nets_old.Nonlocal_FC1_Class,
-        'FC3_Reg'            : nets_old.FC3_Reg,
-        'FC1_Reg'            : nets_old.FC1_Reg
+        'MyModel': nets.MyModel,
     }
-    assert (args.model in list(models.keys()))
     model = models[args.model]
 
-    datasets = {
-        'roi_ls': prepare_data.roi_ls,
-    }
-    assert (args.dataset in list(datasets.keys()))
-    dataset = datasets[args.dataset]
+    logger.info(f'{"=========="*8}\n'
+                f'Configuration: -m {args.model} '
+                f'bs={cfg.batch_size} ep={cfg.epoch} '
+                f'lr={cfg.learning_rate:.0e} step={cfg.gamma}/{cfg.step_size}')
 
-    logger.info(
-        f'{"=========="*8}\n'
-        f'Configuration: -m {args.model} -d {args.dataset} '
-        f'bs={cfg.batch_size} ep={cfg.epoch} '
-        f'lr={cfg.learning_rate:.0e} step={cfg.gamma}/{cfg.step_size}'
-    )
-
-    # train(model, timestamp, output_path)
+    train(model, cfg, timestamp, output_path)

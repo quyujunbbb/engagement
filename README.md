@@ -27,7 +27,7 @@ Nanyang Technological University
 Nidhi Mishra
 Nidhimishra2906@gmail.com
 Switzerland
-Universityof Neuchatel
+University of Neuchatel
 
 Nadia Magnenat Thalmann
 thalmann@miralab.ch
