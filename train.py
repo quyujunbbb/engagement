@@ -204,7 +204,7 @@ if __name__ == '__main__':
     }
     model = models[args.model]
 
-    logger.info(f'Configuration:\n {args.model} bs={cfg.bs} ep={cfg.ep} '
+    logger.info(f'Configuration:\n{args.model} bs={cfg.bs} ep={cfg.ep} '
                 f'lr={cfg.lr:.0e} step={cfg.gamma}/{cfg.step}')
 
     train(model, cfg, timestamp, output_path)
