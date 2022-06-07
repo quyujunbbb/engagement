@@ -77,7 +77,7 @@ class BHEH(Dataset):
         file = self.files[index]
         x = np.load(f'features/roi_features_new/{file}').astype('float32')
         y = self.labels[file]
-        print(np.shape(x), np.shape(y))
+        # print(np.shape(x), np.shape(y))
         return x, y
 
     def __len__(self):

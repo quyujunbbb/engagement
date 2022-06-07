@@ -2,18 +2,15 @@ import argparse
 import os
 import time
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from loguru import logger
-from sklearn.model_selection import KFold
 from tensorboardX import SummaryWriter
 from torch import nn
-from torch.cuda import amp
 from torch.optim.lr_scheduler import StepLR
-from torch.utils.data import DataLoader, SubsetRandomSampler
-from torchinfo import summary
+from torch.utils.data import DataLoader
 
 from models import nets
 from utils.bheh import create_bheh
@@ -28,45 +25,48 @@ def make_parser():
 
 
 class Config:
-    epoch = 10
-    batch_size = 16
-    learning_rate = 1e-4
-    step_size = 10
+    ep = 60
+    bs = 16
+    lr = 1e-4
+    step = 20
     gamma = 0.1
-    num_workers = 2
-    # use_dropout = True
-    # ckpt_root_dir = './checkpoints'
-    # output_dir = 'AffectNet_res18'
-    # pretrained = './pretrain/checkpoints/out_dir_res18/mv_epoch_17.pt'
+    worker = 4
 
 
-def draw_loss(loss_train, loss_test_mse, loss_test_mae, step):
-    writer = SummaryWriter('results/runs')
-    writer.add_scalars(
-        timestamp, {
-            'loss_train': loss_train,
-            'loss_test_mse': loss_test_mse,
-            'loss_test_mae': loss_test_mae
-        }, step)
-    writer.close()
+def save_results(res, fold, output_path):
+    # save results
+    os.makedirs(f'{output_path}/csv/', exist_ok=True)
+    cols = ['epoch', 'train_loss', 'test_loss_mse', 'test_loss_mae']
+    res = pd.DataFrame(res, columns=cols)
+    res.to_csv(f'{output_path}/csv/fold{fold}.csv', index=False)
 
+    # draw loss
+    os.makedirs(f'{output_path}/figs/', exist_ok=True)
+    fig, ax = plt.subplots()
+    ax.plot(res['epoch'], res['train_loss'], label='train loss')
+    ax.plot(res['epoch'], res['test_loss_mse'], label='test loss (mse)')
+    ax.plot(res['epoch'], res['test_loss_mae'], label='test loss (mae)')
+    ax.set_xlabel('epochs')
+    ax.set_ylabel('loss')
+    ax.grid()
+    ax.legend()
+    fig.savefig(f'{output_path}/figs/fold{fold}.png')
 
-def save_results(res):
-    res = pd.DataFrame(res, columns=['setp', 'train', 'test_mse', 'test_mae'])
-    res.to_csv(f'results/csv/{timestamp}.csv', index=False)
+    # draw loss smooth
+    smooth = 0.8
+    smooth_train = res['train_loss'].ewm(alpha=(1 - smooth)).mean()
+    smooth_test_mse = res['test_loss_mse'].ewm(alpha=(1 - smooth)).mean()
+    smooth_test_mae = res['test_loss_mae'].ewm(alpha=(1 - smooth)).mean()
 
     fig, ax = plt.subplots()
-    ax.plot(res['setp'], res['train'], res['setp'], res['test_mse'])
+    ax.plot(res['epoch'], smooth_train, label='train loss')
+    ax.plot(res['epoch'], smooth_test_mse, label='test loss (mse)')
+    ax.plot(res['epoch'], smooth_test_mae, label='test loss (mae)')
+    ax.set_xlabel('epochs')
+    ax.set_ylabel('loss')
     ax.grid()
-    fig.savefig(f'results/figs/{timestamp}.png')
-
-    smooth_factor = 0.8
-    smooth_train = res['train'].ewm(alpha=(1 - smooth_factor)).mean()
-    smooth_test = res['test_mse'].ewm(alpha=(1 - smooth_factor)).mean()
-    fig, ax = plt.subplots()
-    ax.plot(res['setp'], smooth_train, res['setp'], smooth_test)
-    ax.grid()
-    fig.savefig(f'results/figs/{timestamp}_smooth.png')
+    ax.legend()
+    fig.savefig(f'{output_path}/figs/fold{fold}_s.png')
 
 
 def train(model, cfg, timestamp, output_path):
@@ -82,111 +82,108 @@ def train(model, cfg, timestamp, output_path):
         test_files = data_list[fold]
         train_list = np.delete(data_list, fold, axis=0)
         train_files = [item for row in train_list for item in row]
-        logger.info(
-            f'fold {fold}: train_num={len(train_files)}, test_num={len(test_files)}'
-        )
 
         train_data, test_data = create_bheh(train_files, test_files)
         train_loader = DataLoader(dataset=train_data,
-                                  batch_size=cfg.batch_size,
+                                  batch_size=cfg.bs,
                                   shuffle=True,
-                                  num_workers=cfg.num_workers)
+                                  num_workers=cfg.worker)
         test_loader = DataLoader(dataset=test_data,
-                                 batch_size=cfg.batch_size,
+                                 batch_size=cfg.bs,
                                  shuffle=True,
-                                 num_workers=cfg.num_workers)
+                                 num_workers=cfg.worker)
 
-        net = model().to(device='cuda')
-        opt = torch.optim.Adam(net.parameters(), lr=cfg.learning_rate)
-        scheduler = StepLR(opt, step_size=cfg.step_size, gamma=cfg.gamma)
+        if args.model == 'NonLocal':
+            net = model().to(device='cuda')
+        else:
+            net = model(input_size=1024, output_size=64,
+                        head_num=3).to(device='cuda')
+        opt = torch.optim.Adam(net.parameters(), lr=cfg.lr)
+        scheduler = StepLR(opt, step_size=cfg.step, gamma=cfg.gamma)
         criterion_mse = nn.MSELoss()
         criterion_mae = nn.L1Loss()
 
-        logger.info(
-            f'fold    time   | train_l  test_l |    acc     r2 |    '
-            f'acc  b_acc      p      r     f1    auc'
-        )
+        logger.info(f'fold {fold+1}')
         res = []
-        for epoch in range(cfg.epoch):
+        for epoch in range(cfg.ep):
             starttime = time.time()
+
             # train
             torch.set_grad_enabled(True)
             net.train()
             for x_batch, y_batch in train_loader:
                 x_batch = x_batch.to(device='cuda')
-                y_batch = y_batch.to(device='cuda')
+                y_batch = y_batch.clone().detach().to(torch.float).view(
+                    -1, 1).to(device='cuda')
                 y_pred = net(x_batch)
+
                 train_loss = criterion_mse(y_pred, y_batch)
                 net.zero_grad()
                 train_loss.backward()
                 opt.step()
-            
+
             # test
             torch.set_grad_enabled(False)
             net.eval()
-            total_loss = []
-            true_label_list = []
-            pred_label_list = []
+            total_loss_mse, total_loss_mae = [], []
+            y_true_list, y_pred_list = [], []
             for x_batch, y_batch in test_loader:
                 x_batch = x_batch.to(device='cuda')
-                y_batch = y_batch.to(device='cuda')
+                y_batch = y_batch.clone().detach().to(torch.float).view(
+                    -1, 1).to(device='cuda')
                 y_pred = net(x_batch)
+
                 loss_mse = criterion_mse(y_pred, y_batch)
                 loss_mae = criterion_mae(y_pred, y_batch)
+                total_loss_mse.append(loss_mse)
+                total_loss_mae.append(loss_mae)
 
-        # -------------------------------------------------------
-        # test
-        torch.set_grad_enabled(False)
-        net.eval()
-        total_sample = 0
+                y_true_list.append(y_batch.cpu().detach().numpy())
+                y_pred_list.append(y_pred.cpu().detach().numpy())
 
-        for test_batch_index, (img_batch,
-                               label_batch) in enumerate(test_loader):
-            if torch.cuda.is_available():
-                img_batch = img_batch.cuda().float()
-                label_batch = label_batch.cuda().float()
+            mean_loss_mse = sum(total_loss_mse) / total_loss_mse.__len__()
+            mean_loss_mae = sum(total_loss_mae) / total_loss_mae.__len__()
 
-            predict = net(img_batch)
-            loss_mse = criterion_mse(predict, label_batch)
-            loss_mae = criterion_mae(predict, label_batch)
-            total_sample += img_batch.size(0)
+            # logs
+            logger.info(
+                f'ep{epoch+1}  {time.time() - starttime:.1f}  '
+                f'{train_loss.item(): 2.4f}  '
+                f'{mean_loss_mse.item(): 2.4f}  {mean_loss_mae.item(): 2.4f}')
+            writer.add_scalars(
+                f'{timestamp}/{fold}', {
+                    'train loss': train_loss.item(),
+                    'test loss (mse)': mean_loss_mse.item(),
+                    'test loss (mae)': mean_loss_mae.item()
+                }, epoch)
+            res.append([
+                epoch,
+                train_loss.item(),
+                mean_loss_mse.item(),
+                mean_loss_mae.item()
+            ])
+            res_overall[fold] = [
+                train_loss.item(),
+                mean_loss_mse.item(),
+                mean_loss_mae.item()
+            ]
 
-        net.train()
+            net.train()
+            scheduler.step()
 
-        # -------------------------------------------------------
-        # logs
-        logger.info(f'[{epoch_index+1:03d}/{epochs}] '
-                    f'lr:{opt.param_groups[0]["lr"]:.0e} '
-                    f'time:{time.time() - startime:.2f}s | '
-                    f'train:{loss.item():4f}, '
-                    f'mse:{loss_mse.item():4f}, '
-                    f'mae:{loss_mae.item():4f}')
+        writer.close()
+        save_results(res, fold, output_path)
 
-        res.append(
-            [epoch_index,
-             loss.item(),
-             loss_mse.item(),
-             loss_mae.item()])
-        writer.add_scalars(
-            timestamp, {
-                'train': loss.item(),
-                'test_mse': loss_mse.item(),
-                'test_mae': loss_mae.item()
-            }, epoch_index)
-
-        scheduler.step()
-
-    writer.close()
-    save_results(res)
-
-    net.cpu()
-    weight_path = f'{ckpt_save_path}{args.model}_f{fold}.pth'
-    torch.save(
-        {
-            'epoch': epochs,
-            'model_state_dict': net.state_dict(),
-            'optimizer_state_dict': opt.state_dict()
-        }, weight_path)
+    avg_train_loss, avg_test_loss_mse, avg_test_loss_mae = 0.0, 0.0, 0.0
+    for _, value in res_overall.items():
+        avg_train_loss += value[0]
+        avg_test_loss_mse += value[1]
+        avg_test_loss_mae += value[2]
+    avg_train_loss = avg_train_loss / fold_num
+    avg_test_loss_mse = avg_test_loss_mse / fold_num
+    avg_test_loss_mae = avg_test_loss_mae / fold_num
+    logger.info(f'----------------------------------\n'
+                f'            {avg_train_loss:.4f}  '
+                f'{avg_test_loss_mse:.4f}  {avg_test_loss_mae:.4f}')
 
 
 if __name__ == '__main__':
@@ -201,13 +198,13 @@ if __name__ == '__main__':
     logger.add(f'{output_path}/log.txt', format='{message}', level='INFO')
 
     models = {
-        'MyModel': nets.MyModel,
+        'NonLocal': nets.NonLocal,
+        'GAT': nets.GAT,
+        'NonLocalGAT': nets.NonLocalGAT,
     }
     model = models[args.model]
 
-    logger.info(f'{"=========="*8}\n'
-                f'Configuration: -m {args.model} '
-                f'bs={cfg.batch_size} ep={cfg.epoch} '
-                f'lr={cfg.learning_rate:.0e} step={cfg.gamma}/{cfg.step_size}')
+    logger.info(f'Configuration:\n {args.model} bs={cfg.bs} ep={cfg.ep} '
+                f'lr={cfg.lr:.0e} step={cfg.gamma}/{cfg.step}')
 
     train(model, cfg, timestamp, output_path)
