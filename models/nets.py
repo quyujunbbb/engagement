@@ -370,8 +370,9 @@ if __name__ == '__main__':
     print(f'non-local block output shape: {out.shape}')
 
     # gat
+    layer = 'AdaptedGAL'  # GAL or AdaptedGAL
     net2 = GAT(input_size=1024, output_size=64, head_num=3,
-               layer='GAL').to(device='cuda')
+               layer=layer).to(device='cuda')
     out = net2(out)
     print(f'gat output shape: {out.shape}')
 
@@ -379,6 +380,23 @@ if __name__ == '__main__':
     net3 = NonLocalGAT(input_size=1024,
                        output_size=64,
                        head_num=3,
-                       layer='GAL').to(device='cuda')
+                       layer=layer).to(device='cuda')
     out = net3(input)
     print(f'non-local + gat output shape: {out.shape}')
+
+    # params = net3.state_dict()
+    # print(params.keys())
+    gat_params = [
+        'layer.W', 'layer.a0', 'layer.ai', 'layer_out.W', 'layer_out.a0',
+        'layer_out.ai', 'GraphAttention0.W', 'GraphAttention0.a0',
+        'GraphAttention0.ai', 'GraphAttention1.W', 'GraphAttention1.a0',
+        'GraphAttention1.ai', 'GraphAttention2.W', 'GraphAttention2.a0',
+        'GraphAttention2.ai'
+    ]
+    for name, param in net3.named_parameters():
+        if param.requires_grad and name in gat_params:
+            param.requires_grad = False
+
+    for name, param in net3.named_parameters():
+        if param.requires_grad:
+            print(name)

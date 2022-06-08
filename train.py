@@ -1,4 +1,3 @@
-import argparse
 import os
 import time
 
@@ -16,21 +15,16 @@ from models import nets
 from utils.bheh import create_bheh
 
 
-def make_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--model', dest='model', type=str)
-    parser.add_argument('-l', '--layer', dest='layer', type=str)
-
-    return parser
-
-
 class Config:
-    ep = 60
+    model = 'NonLocalGAT'  # NonLocal, GAT, NonLocalGAT
+    layer = 'AdaptedGAL'  # GAL, AdaptedGAL
+    freeze = True
     bs = 16
+    ep = 80
     lr = 1e-4
-    step = 20
+    step = 40
     gamma = 0.1
-    worker = 4
+    worker = 2
 
 
 def save_results(res, fold, output_path):
@@ -69,9 +63,9 @@ def save_results(res, fold, output_path):
     fig.savefig(f'{output_path}/figs/fold{fold}_s.png')
 
 
-def train(model, layer, cfg, timestamp, output_path):
-    # ckpt_save_path = f'{output_path}ckpts/'
-    # os.makedirs(ckpt_save_path, exist_ok=True)
+def train(model, cfg, timestamp, output_path):
+    ckpt_save_path = f'{output_path}ckpts/'
+    os.makedirs(ckpt_save_path, exist_ok=True)
     writer = SummaryWriter('runs')
 
     fold_num = 5
@@ -93,13 +87,28 @@ def train(model, layer, cfg, timestamp, output_path):
                                  shuffle=True,
                                  num_workers=cfg.worker)
 
-        if args.model == 'NonLocal':
+        if cfg.model == 'NonLocal':
             net = model().to(device='cuda')
         else:
             net = model(input_size=1024,
                         output_size=64,
                         head_num=3,
-                        layer=layer).to(device='cuda')
+                        layer=cfg.layer).to(device='cuda')
+        if cfg.freeze:
+            gat_params = [
+                'layer.W', 'layer.a0', 'layer.ai', 'layer_out.W', 'layer_out.a0',
+                'layer_out.ai', 'GraphAttention0.W', 'GraphAttention0.a0',
+                'GraphAttention0.ai', 'GraphAttention1.W', 'GraphAttention1.a0',
+                'GraphAttention1.ai', 'GraphAttention2.W', 'GraphAttention2.a0',
+                'GraphAttention2.ai'
+            ]
+            for name, param in net.named_parameters():
+                if param.requires_grad and name in gat_params:
+                    param.requires_grad = False
+            for name, param in net.named_parameters():
+                if param.requires_grad:
+                    print(name)
+
         opt = torch.optim.Adam(net.parameters(), lr=cfg.lr)
         scheduler = StepLR(opt, step_size=cfg.step, gamma=cfg.gamma)
         criterion_mse = nn.MSELoss()
@@ -175,6 +184,13 @@ def train(model, layer, cfg, timestamp, output_path):
         writer.close()
         save_results(res, fold, output_path)
 
+        weight_path = f'{ckpt_save_path}{cfg.model}_fold{fold}.pth'
+        net.cpu()
+        torch.save({
+            'epoch': cfg.ep,
+            'model_state_dict': net.state_dict(),
+            'optimizer_state_dict': opt.state_dict()}, weight_path)
+
     avg_train_loss, avg_test_loss_mse, avg_test_loss_mae = 0.0, 0.0, 0.0
     for _, value in res_overall.items():
         avg_train_loss += value[0]
@@ -192,7 +208,6 @@ if __name__ == '__main__':
     torch.manual_seed(0)
     torch.backends.cudnn.benchmark = True
 
-    args = make_parser().parse_args()
     cfg = Config()
     timestamp = time.strftime('%y%m%d-%H%M%S', time.localtime())
     output_path = f'results/{timestamp}/'
@@ -204,9 +219,10 @@ if __name__ == '__main__':
         'GAT'        : nets.GAT,
         'NonLocalGAT': nets.NonLocalGAT,
     }
-    model = models[args.model]
+    assert cfg.model in models, f'{cfg.model} not in {models}'
+    model = models[cfg.model]
 
-    logger.info(f'Configuration: {args.model}-{args.layer} bs={cfg.bs} ep={cfg.ep} '
+    logger.info(f'Configuration: {cfg.model}-{cfg.layer} bs={cfg.bs} ep={cfg.ep} '
                 f'lr={cfg.lr:.0e} step={cfg.gamma}/{cfg.step}')
 
-    train(model, args.layer, cfg, timestamp, output_path)
+    train(model, cfg, timestamp, output_path)
