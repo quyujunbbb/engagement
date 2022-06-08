@@ -93,22 +93,27 @@ class process_images():
         # info.to_csv('data/session_info_new.csv', index=False)
         print(info.sum())
 
-    def image2np(input_path, output_path):
-        print('image2np')
-        images_out = []
-        images = natsorted(os.listdir(input_path))
-        totle_image_number = len(images)
-        images = images[0:totle_image_number:5]
-        sampled_image_number = len(images)
-        print(f'total {totle_image_number} images, samples {sampled_image_number} images')
-        for image in images:
-            temp = cv2.imread(input_path + image)
-            temp = temp[:, 420:1500, :]
-            images_out.append(temp)
-        images_out = np.array(images_out)
-        print(images_out.shape)
-        np.save(output_path, images_out)
-    
+    def select_images():
+        print('select_images')
+        input_path = 'images/'
+        output_path = 'selected_images/'
+        folders = natsorted(os.listdir(input_path))
+        for folder in folders:
+            input_folder_path = input_path + folder + '/'
+            output_folder_path = output_path + folder + '/'
+            os.makedirs(output_folder_path, exist_ok=True)
+            imgs = natsorted(os.listdir(input_folder_path))
+            img1 = cv2.imread(output_folder_path + imgs[100])
+            img2 = cv2.imread(output_folder_path + imgs[300])
+            img3 = cv2.imread(output_folder_path + imgs[500])
+            img4 = cv2.imread(output_folder_path + imgs[700])
+            img5 = cv2.imread(output_folder_path + imgs[900])
+            cv2.imwrite(output_folder_path + imgs[100], img1)
+            cv2.imwrite(output_folder_path + imgs[300], img2)
+            cv2.imwrite(output_folder_path + imgs[500], img3)
+            cv2.imwrite(output_folder_path + imgs[700], img4)
+            cv2.imwrite(output_folder_path + imgs[900], img5)
+
     def crop_images(input_path, output_root_path, crop_boxes_path):
         print('crop_images:')
         boxes = pd.read_csv(crop_boxes_path)
@@ -138,6 +143,22 @@ class process_images():
                 img = cv2.imread(session_path + image)
                 img = img[:, x_left:x_right, :]
                 cv2.imwrite(output_path + image, img)
+
+    def image2np(input_path, output_path):
+        print('image2np')
+        images_out = []
+        images = natsorted(os.listdir(input_path))
+        totle_image_number = len(images)
+        images = images[0:totle_image_number:5]
+        sampled_image_number = len(images)
+        print(f'total {totle_image_number} images, samples {sampled_image_number} images')
+        for image in images:
+            temp = cv2.imread(input_path + image)
+            temp = temp[:, 420:1500, :]
+            images_out.append(temp)
+        images_out = np.array(images_out)
+        print(images_out.shape)
+        np.save(output_path, images_out)
 
 
 class process_bytetrack():
@@ -198,6 +219,8 @@ if __name__ == '__main__':
     # process_videos.video2images(video_path, image_path)
 
     # --------------------------------------------------------------------------
+    process_images.select_images(image_path, cropped_image_path)
+
     # image2np
     # image_folders = ['20201222_01', '20201222_02']
     # for image_folder in image_folders:
@@ -206,7 +229,7 @@ if __name__ == '__main__':
     #     process_images.image2np(image_path, numpy_path)
 
     # crop_images
-    process_images.crop_images(image_path, cropped_image_path, crop_boxes_path)
+    # process_images.crop_images(image_path, cropped_image_path, crop_boxes_path)
     # img = cv2.imread('data/images_crop/20201222_01/xxxxx.jpg')
     # print(img.shape)
     # img = img[355:1106, 237:440, :]  # [y1:y2, x1:x2, :]
