@@ -19,7 +19,7 @@ from utils.bheh import create_bheh
 def make_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model', dest='model', type=str)
-    parser.add_argument('-d', '--data', dest='dataset', type=str)
+    parser.add_argument('-l', '--layer', dest='layer', type=str)
 
     return parser
 
@@ -69,7 +69,7 @@ def save_results(res, fold, output_path):
     fig.savefig(f'{output_path}/figs/fold{fold}_s.png')
 
 
-def train(model, cfg, timestamp, output_path):
+def train(model, layer, cfg, timestamp, output_path):
     # ckpt_save_path = f'{output_path}ckpts/'
     # os.makedirs(ckpt_save_path, exist_ok=True)
     writer = SummaryWriter('runs')
@@ -96,8 +96,10 @@ def train(model, cfg, timestamp, output_path):
         if args.model == 'NonLocal':
             net = model().to(device='cuda')
         else:
-            net = model(input_size=1024, output_size=64,
-                        head_num=3).to(device='cuda')
+            net = model(input_size=1024,
+                        output_size=64,
+                        head_num=3,
+                        layer=layer).to(device='cuda')
         opt = torch.optim.Adam(net.parameters(), lr=cfg.lr)
         scheduler = StepLR(opt, step_size=cfg.step, gamma=cfg.gamma)
         criterion_mse = nn.MSELoss()
@@ -146,9 +148,9 @@ def train(model, cfg, timestamp, output_path):
 
             # logs
             logger.info(
-                f'ep{epoch+1}  {time.time() - starttime:.1f}  '
-                f'{train_loss.item(): 2.4f}  '
-                f'{mean_loss_mse.item(): 2.4f}  {mean_loss_mae.item(): 2.4f}')
+                f'ep{epoch+1:02d} {time.time()-starttime:.1f} '
+                f'{train_loss.item():.4f} '
+                f'{mean_loss_mse.item():.4f} {mean_loss_mae.item():.4f}')
             writer.add_scalars(
                 f'{timestamp}/{fold}', {
                     'train loss': train_loss.item(),
@@ -181,9 +183,9 @@ def train(model, cfg, timestamp, output_path):
     avg_train_loss = avg_train_loss / fold_num
     avg_test_loss_mse = avg_test_loss_mse / fold_num
     avg_test_loss_mae = avg_test_loss_mae / fold_num
-    logger.info(f'----------------------------------\n'
-                f'            {avg_train_loss:.4f}  '
-                f'{avg_test_loss_mse:.4f}  {avg_test_loss_mae:.4f}')
+    logger.info(f'-------------------------------\n'
+                f'           {avg_train_loss:.4f} '
+                f'{avg_test_loss_mse:.4f} {avg_test_loss_mae:.4f}')
 
 
 if __name__ == '__main__':
@@ -198,13 +200,13 @@ if __name__ == '__main__':
     logger.add(f'{output_path}/log.txt', format='{message}', level='INFO')
 
     models = {
-        'NonLocal': nets.NonLocal,
-        'GAT': nets.GAT,
+        'NonLocal'   : nets.NonLocal,
+        'GAT'        : nets.GAT,
         'NonLocalGAT': nets.NonLocalGAT,
     }
     model = models[args.model]
 
-    logger.info(f'Configuration:\n{args.model} bs={cfg.bs} ep={cfg.ep} '
+    logger.info(f'Configuration: {args.model}-{args.layer} bs={cfg.bs} ep={cfg.ep} '
                 f'lr={cfg.lr:.0e} step={cfg.gamma}/{cfg.step}')
 
-    train(model, cfg, timestamp, output_path)
+    train(model, args.layer, cfg, timestamp, output_path)

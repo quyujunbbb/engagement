@@ -122,10 +122,10 @@ class NonLocal(nn.Module):
 
 # ------------------------------------------------------------------------------
 # Graph Attention Neural Networks
-class GraphAttentionLayer(nn.Module):
+class GAL(nn.Module):
 
     def __init__(self, input_size, output_size, dropout, alpha, concat=True):
-        super(GraphAttentionLayer, self).__init__()
+        super(GAL, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
         self.dropout = dropout
@@ -234,26 +234,39 @@ class GAT(nn.Module):
                  input_size,
                  output_size,
                  head_num,
+                 layer,
                  dropout=0.5,
                  alpha=0.2):
         super(GAT, self).__init__()
 
+        if layer == 'GAL':
+            self.layer = GAL(input_size,
+                             output_size,
+                             dropout,
+                             alpha,
+                             concat=False)
+            self.layer_out = GAL(output_size * head_num,
+                                 output_size,
+                                 dropout,
+                                 alpha,
+                                 concat=False)
+        elif layer == 'AdaptedGAL':
+            self.layer = AdaptedGAL(input_size,
+                                    output_size,
+                                    dropout,
+                                    alpha,
+                                    concat=False)
+            self.layer_out = AdaptedGAL(output_size * head_num,
+                                        output_size,
+                                        dropout,
+                                        alpha,
+                                        concat=False)
+
         self.dropout = dropout
         self.fc = nn.Linear(in_features=64, out_features=1)
-        self.attentions = [
-            AdaptedGAL(input_size,
-                       output_size,
-                       dropout=dropout,
-                       alpha=alpha,
-                       concat=False) for _ in range(head_num)
-        ]
+        self.attentions = [self.layer for _ in range(head_num)]
         for i, attention in enumerate(self.attentions):
             self.add_module(f'GraphAttention{i}', attention)
-        self.out_att = AdaptedGAL(output_size * head_num,
-                                  output_size,
-                                  dropout=dropout,
-                                  alpha=alpha,
-                                  concat=False)
 
     def forward(self, x):
         batch_size = x.size(0)
@@ -270,7 +283,7 @@ class GAT(nn.Module):
             temp = F.dropout(temp, self.dropout, training=self.training)
             # print(temp.shape)
             # temp = F.elu(self.out_att(temp, adj[i]))
-            out[i] = self.out_att(temp, adj[i])
+            out[i] = self.layer_out(temp, adj[i])
         # print(out.shape)
         out = out[:, 0, :]
         # print(out.shape)
@@ -285,6 +298,7 @@ class NonLocalGAT(nn.Module):
                  input_size,
                  output_size,
                  head_num,
+                 layer,
                  dropout=0.5,
                  alpha=0.2):
         super(NonLocalGAT, self).__init__()
@@ -292,54 +306,53 @@ class NonLocalGAT(nn.Module):
         self.nl = NonLocalBlock(in_channels=4096)
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
 
+        if layer == 'GAL':
+            self.layer = GAL(input_size,
+                             output_size,
+                             dropout,
+                             alpha,
+                             concat=False)
+            self.layer_out = GAL(output_size * head_num,
+                                 output_size,
+                                 dropout,
+                                 alpha,
+                                 concat=False)
+        elif layer == 'AdaptedGAL':
+            self.layer = AdaptedGAL(input_size,
+                                    output_size,
+                                    dropout,
+                                    alpha,
+                                    concat=False)
+            self.layer_out = AdaptedGAL(output_size * head_num,
+                                        output_size,
+                                        dropout,
+                                        alpha,
+                                        concat=False)
+
         self.dropout = dropout
         self.fc = nn.Linear(in_features=64, out_features=1)
-        self.attentions = [
-            AdaptedGAL(input_size,
-                       output_size,
-                       dropout=dropout,
-                       alpha=alpha,
-                       concat=False) for _ in range(head_num)
-        ]
+        self.attentions = [self.layer for _ in range(head_num)]
         for i, attention in enumerate(self.attentions):
             self.add_module(f'GraphAttention{i}', attention)
-        self.out_att = AdaptedGAL(output_size * head_num,
-                                  output_size,
-                                  dropout=dropout,
-                                  alpha=alpha,
-                                  concat=False)
 
     def forward(self, x):
         batch_size = x.size(0)
-        # print(f'batch size: {batch_size}, x shape: {x.shape}')
 
         x = x.reshape(batch_size, 4, -1, 1024, 7, 7)
-        # print(x.shape)  # [batch_size, 4, 4, 1024, 7, 7]
         x = x.reshape(batch_size, 4, -1, 7, 7).permute(0, 2, 1, 3, 4)
-        # print(x.shape)  # [batch_size, 4096, 4, 7, 7]
         x = self.nl(x)
         x = self.avgpool(x)
-        # print(x.shape)  # [batch_size, 4096, 1, 1, 1]
         x = x.reshape(batch_size, -1).reshape(batch_size, 4, 1024)
-        # print(x.shape)  # [batch_size, 4, 1024]
 
         adj = torch.randn(batch_size, 4, 4).to(device='cuda')
         out = torch.zeros(batch_size, 4, 64).to(device='cuda')
-        # print(out.shape)
         for i in range(batch_size):
-            # print(x[i].shape, adj[i].shape)
             temp = F.dropout(x[i], self.dropout, training=self.training)
-            # print(temp.shape)
             temp = torch.cat([att(temp, adj[i]) for att in self.attentions],
                              dim=1)
-            # print(temp.shape)
             temp = F.dropout(temp, self.dropout, training=self.training)
-            # print(temp.shape)
-            # temp = F.elu(self.out_att(temp, adj[i]))
-            out[i] = self.out_att(temp, adj[i])
-        # print(out.shape)
+            out[i] = self.layer_out(temp, adj[i])
         out = out[:, 0, :]
-        # print(out.shape)
         out = self.fc(out)
 
         return out
@@ -357,11 +370,15 @@ if __name__ == '__main__':
     print(f'non-local block output shape: {out.shape}')
 
     # gat
-    net2 = GAT(input_size=1024, output_size=64, head_num=3).to(device='cuda')
+    net2 = GAT(input_size=1024, output_size=64, head_num=3,
+               layer='GAL').to(device='cuda')
     out = net2(out)
     print(f'gat output shape: {out.shape}')
 
     # non-local + gat
-    net3 = NonLocalGAT(input_size=1024, output_size=64, head_num=3).to(device='cuda')
+    net3 = NonLocalGAT(input_size=1024,
+                       output_size=64,
+                       head_num=3,
+                       layer='GAL').to(device='cuda')
     out = net3(input)
     print(f'non-local + gat output shape: {out.shape}')
