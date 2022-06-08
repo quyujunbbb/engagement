@@ -1,7 +1,46 @@
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-list = [[10.5, 11.7], [3.1, 27.3], [10.5, 24.9], [9.7, 17.9], [6.6, 15.5],
-        [11.3, 15.5], [6.2, 21.8]]
 
-for row in list:
-    print(row[0] * 2 + row[1])
+def draw_loss():
+    res = pd.read_csv('results/220607-102243/csv/fold0.csv')
+
+    # draw loss
+    fig, ax = plt.subplots()
+    ax.plot(res['epoch'], res['train_loss'], label='train loss')
+    ax.plot(res['epoch'], res['test_loss_mse'], label='test loss (mse)')
+    ax.plot(res['epoch'], res['test_loss_mae'], label='test loss (mae)')
+    ax.set_xlabel('epochs')
+    ax.set_ylabel('loss')
+    ax.grid()
+    ax.legend()
+    fig.savefig(f'results/220607-102243/figs/fold0.png')
+
+    # draw loss smooth
+    smooth = 0.8
+    smooth_train = res['train_loss'].ewm(alpha=(1 - smooth)).mean()
+    smooth_test_mse = res['test_loss_mse'].ewm(alpha=(1 - smooth)).mean()
+    smooth_test_mae = res['test_loss_mae'].ewm(alpha=(1 - smooth)).mean()
+
+    fig, ax = plt.subplots()
+    ax.plot(res['epoch'], smooth_train, label='train loss')
+    ax.plot(res['epoch'], smooth_test_mse, label='test loss (mse)')
+    ax.plot(res['epoch'], smooth_test_mae, label='test loss (mae)')
+    ax.set_xlabel('epochs')
+    ax.set_ylabel('loss')
+    ax.grid()
+    ax.legend()
+    fig.savefig(f'results/220607-102243/figs/fold0_s.png')
+
+    # draw mae vs. mse
+    fig, ax = plt.subplots()
+    ax.plot(res['test_loss_mae'], res['test_loss_mse'])
+    ax.set_xlabel('test_loss_mae')
+    ax.set_ylabel('test_loss_mse')
+    ax.grid()
+    fig.savefig(f'results/220607-102243/figs/fold0_mae_vs_mse.png')
+
+
+if __name__ == '__main__':
+    draw_loss()
