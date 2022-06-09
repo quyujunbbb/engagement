@@ -8,19 +8,20 @@ from torch.nn.functional import normalize
 
 # ------------------------------------------------------------------------------
 # subtraction
-all = np.array([0.0142, 0.0773])
+all = np.array([0.0148, 0.0996])
 b = np.array([0.0451, 0.1750])
 a = np.array([0.1235, 0.3690])
 v = np.array([0.1567, 0.4184])
-wa = np.array([0.0567, 0.2130])
-wg = np.array([0.0313, 0.1091])
+wa = np.array([0.0253, 0.1382])
+wg = np.array([0.0296, 0.1380])
+gal = np.array([0.0173, 0.1080])
 
 print(b-all)
 print(a-all)
 print(v-all)
 print(wa-all)
 print(wg-all)
-
+print(gal-all)
 
 # ------------------------------------------------------------------------------
 # create random loss
@@ -43,17 +44,17 @@ print(wg-all)
 
 # ------------------------------------------------------------------------------
 # in classification, the best results
-labels = pd.read_csv('data/annotations/labels_class.csv')
-y = torch.tensor(labels['overall'].values)
-y_hat = torch.tensor(labels['class_value'].values)
-print(y)
-print(y_hat)
+# labels = pd.read_csv('data/annotations/labels_class.csv')
+# y = torch.tensor(labels['overall'].values)
+# y_hat = torch.tensor(labels['class_value'].values)
+# print(y)
+# print(y_hat)
 
-loss_func_mse = nn.MSELoss()
-loss_func_mae = nn.L1Loss()
+# loss_func_mse = nn.MSELoss()
+# loss_func_mae = nn.L1Loss()
 
-loss_mse = loss_func_mse(y_hat, y)
-loss_mae = loss_func_mae(y_hat, y)
+# loss_mse = loss_func_mse(y_hat, y)
+# loss_mae = loss_func_mae(y_hat, y)
 
-print(f'mse={loss_mse:.6f}, mae={loss_mae:.6f}')
+# print(f'mse={loss_mse:.6f}, mae={loss_mae:.6f}')
 # mse=0.000064, mae=0.002340

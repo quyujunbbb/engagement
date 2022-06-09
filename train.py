@@ -17,8 +17,9 @@ from utils.bheh import create_bheh
 
 class Config:
     model = 'NonLocalGAT'  # NonLocal, GAT, NonLocalGAT
-    layer = 'AdaptedGAL'  # GAL, AdaptedGAL
-    freeze = True
+    layer = 'GAL'  # GAL, AdaptedGAL
+    activation = True
+    freeze_gat = False
     bs = 16
     ep = 80
     lr = 1e-4
@@ -93,8 +94,9 @@ def train(model, cfg, timestamp, output_path):
             net = model(input_size=1024,
                         output_size=64,
                         head_num=3,
-                        layer=cfg.layer).to(device='cuda')
-        if cfg.freeze:
+                        layer=cfg.layer,
+                        activation=cfg.activation).to(device='cuda')
+        if cfg.freeze_gat:
             gat_params = [
                 'layer.W', 'layer.a0', 'layer.ai', 'layer_out.W', 'layer_out.a0',
                 'layer_out.ai', 'GraphAttention0.W', 'GraphAttention0.a0',
@@ -114,7 +116,8 @@ def train(model, cfg, timestamp, output_path):
         criterion_mse = nn.MSELoss()
         criterion_mae = nn.L1Loss()
 
-        logger.info(f'fold {fold+1}')
+        logger.info(f'fold {fold+1}\n'
+                    f'ep  time  train    mse    mae')
         res = []
         for epoch in range(cfg.ep):
             starttime = time.time()
@@ -157,7 +160,7 @@ def train(model, cfg, timestamp, output_path):
 
             # logs
             logger.info(
-                f'ep{epoch+1:02d} {time.time()-starttime:.1f} '
+                f'{epoch+1:02d} {time.time()-starttime:.1f} '
                 f'{train_loss.item():.4f} '
                 f'{mean_loss_mse.item():.4f} {mean_loss_mae.item():.4f}')
             writer.add_scalars(
@@ -212,11 +215,10 @@ if __name__ == '__main__':
     timestamp = time.strftime('%y%m%d-%H%M%S', time.localtime())
     output_path = f'results/{timestamp}/'
     os.makedirs(output_path, exist_ok=True)
-    logger.add(f'{output_path}/log.txt', format='{message}', level='INFO')
+    logger.add(f'{output_path}/{timestamp}.txt', format='{message}', level='INFO')
 
     models = {
         'NonLocal'   : nets.NonLocal,
-        'GAT'        : nets.GAT,
         'NonLocalGAT': nets.NonLocalGAT,
     }
     assert cfg.model in models, f'{cfg.model} not in {models}'

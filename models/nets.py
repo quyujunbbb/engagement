@@ -235,6 +235,7 @@ class GAT(nn.Module):
                  output_size,
                  head_num,
                  layer,
+                 activation=True,
                  dropout=0.5,
                  alpha=0.2):
         super(GAT, self).__init__()
@@ -244,7 +245,7 @@ class GAT(nn.Module):
                              output_size,
                              dropout,
                              alpha,
-                             concat=False)
+                             concat=activation)
             self.layer_out = GAL(output_size * head_num,
                                  output_size,
                                  dropout,
@@ -255,7 +256,7 @@ class GAT(nn.Module):
                                     output_size,
                                     dropout,
                                     alpha,
-                                    concat=False)
+                                    concat=activation)
             self.layer_out = AdaptedGAL(output_size * head_num,
                                         output_size,
                                         dropout,
@@ -299,6 +300,7 @@ class NonLocalGAT(nn.Module):
                  output_size,
                  head_num,
                  layer,
+                 activation=True,
                  dropout=0.5,
                  alpha=0.2):
         super(NonLocalGAT, self).__init__()
@@ -311,7 +313,7 @@ class NonLocalGAT(nn.Module):
                              output_size,
                              dropout,
                              alpha,
-                             concat=False)
+                             concat=activation)
             self.layer_out = GAL(output_size * head_num,
                                  output_size,
                                  dropout,
@@ -322,7 +324,7 @@ class NonLocalGAT(nn.Module):
                                     output_size,
                                     dropout,
                                     alpha,
-                                    concat=False)
+                                    concat=activation)
             self.layer_out = AdaptedGAL(output_size * head_num,
                                         output_size,
                                         dropout,
