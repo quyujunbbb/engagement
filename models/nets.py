@@ -361,7 +361,7 @@ class NonLocalGAT(nn.Module):
 
 
 if __name__ == '__main__':
-    input = np.load('features/roi_features_new/20201222_01/0.npy')
+    input = np.load('features/roi_features/20201222_01/0.npy')
     input = torch.from_numpy(input)
     input = input.unsqueeze(0).to(device='cuda')
     print(f'input shape: {input.shape}')

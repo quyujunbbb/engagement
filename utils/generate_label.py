@@ -5,10 +5,10 @@ import pandas as pd
 from natsort import natsorted
 
 
-def generate_clip_label_new(input_path, output_path):
-    print('generate_clip_label_new:')
+def generate_clip_label(input_path, output_path):
+    print('generate_clip_label:')
 
-    session_info = pd.read_csv('data/session_info_new.csv')
+    session_info = pd.read_csv('data/session_info.csv')
 
     dates = ['20201222', '20201229', '20210105', '20210309']
     session_num = [14, 6, 14, 9]
@@ -154,13 +154,13 @@ def concate_label(input_path, output_path):
             label = pd.read_csv(input_path + file)
             print(len(label))
             output_label = pd.concat([output_label, label], axis=0)
-    output_label.to_csv(output_path + 'labels_new.csv', index=False)
+    output_label.to_csv(output_path + 'labels.csv', index=False)
 
 
 if __name__ == '__main__':
     start_end_path = 'data/annotations/start_end/'
-    processed_path = 'data/annotations/processed_new/'
+    processed_path = 'data/annotations/processed/'
     concate_path = 'data/annotations/'
 
-    generate_clip_label_new(start_end_path, processed_path)
+    generate_clip_label(start_end_path, processed_path)
     concate_label(processed_path, concate_path)

@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     weight_path = 'pretrained/i3d_r50_kinetics.pth'
     session_folder_path = 'data/images_crop/'
-    r3d_feature_path = 'features/r3d_features_new/'
+    r3d_feature_path = 'features/r3d_features/'
     os.makedirs(r3d_feature_path, exist_ok=True)
 
     net = i3_res50(400, weight_path)

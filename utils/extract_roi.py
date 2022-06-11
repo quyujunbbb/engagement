@@ -88,10 +88,10 @@ if __name__ == "__main__":
     print("Extract RoI features")
     # output size: [p_num, 4, 1024, 7, 7]
 
-    r3d_path = 'features/r3d_features_new/'
-    box_txt_path = 'features/bytetrack_new/boxes/'
+    r3d_path = 'features/r3d_features/'
+    box_txt_path = 'features/bytetrack/boxes/'
     box_csv_path = 'features/boxes/'
-    roi_path = 'features/roi_features_new/'
+    roi_path = 'features/roi_features/'
     os.makedirs(roi_path, exist_ok=True)
 
     # convert txt to csv and add clip index

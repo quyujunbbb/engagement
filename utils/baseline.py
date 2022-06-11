@@ -22,7 +22,7 @@ def create_label(files, labels):
 
 
 def get_ground_truth(train_files, test_files):
-    label_path = f'data/annotations/labels_new.csv'
+    label_path = f'data/annotations/labels.csv'
     labels = pd.read_csv(label_path)
     train_label = create_label(train_files, labels)
     test_label = create_label(test_files, labels)

@@ -90,7 +90,7 @@ class process_images():
             info.append([session, total_frame, sampled_frame, clip_num])
         info = pd.DataFrame(info, columns=cols)
         print(info)
-        # info.to_csv('data/session_info_new.csv', index=False)
+        # info.to_csv('data/session_info.csv', index=False)
         print(info.sum())
 
     def select_images():
@@ -212,7 +212,7 @@ if __name__ == '__main__':
     image_path = 'data/images/'
     cropped_image_path = 'data/images_crop/'
     crop_boxes_path = 'data/crop_boxes.csv'
-    bounding_box_path = 'features/bytetrack_new/boxes/'
+    bounding_box_path = 'features/bytetrack/boxes/'
 
     # --------------------------------------------------------------------------
     # process_videos.video_info(video_path)

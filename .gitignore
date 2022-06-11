@@ -1,20 +1,19 @@
-# data
+# data & features
 data/images/
 data/images_crop/
 data/profiles/
-
-# features
 features/
 
 # results
 results/
 runs/
 
-# visualize
-visualize/data/
+# demo
+demo/
 
 # others
 .vscode/
 __pycache__/
+
 pretrained/
 run.sh

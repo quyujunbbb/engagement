@@ -75,7 +75,7 @@ class BHEH(Dataset):
 
     def __getitem__(self, index):
         file = self.files[index]
-        x = np.load(f'features/roi_features_new/{file}').astype('float32')
+        x = np.load(f'features/roi_features/{file}').astype('float32')
         y = self.labels[file]
         # print(np.shape(x), np.shape(y))
         return x, y
@@ -101,7 +101,7 @@ def create_label(files, labels):
 
 
 def create_bheh(train_files, test_files):
-    label_path = f'data/annotations/labels_new.csv'
+    label_path = f'data/annotations/labels.csv'
     labels = pd.read_csv(label_path)
     train_label = create_label(train_files, labels)
     test_label = create_label(test_files, labels)
@@ -113,7 +113,7 @@ def create_bheh(train_files, test_files):
 
 
 if __name__ == '__main__':
-    roi_path = 'features/roi_features_new/'
+    roi_path = 'features/roi_features/'
     # print_session_info()
     # generate_data_list(roi_path)
 
